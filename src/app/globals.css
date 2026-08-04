@@ -181,7 +181,15 @@ textarea.input { min-height: 96px; resize: vertical; line-height: 1.6; }
 .stat-sub { font-size: 12px; color: var(--text-3); margin-top: 3px; }
 
 /* ─── 테이블 ───────────────────────────────────────────────── */
-.tablewrap { overflow-x: auto; }
+/*
+ * overflow-x: auto 만 있으면 overflow-y 가 스펙상 auto 로 자동 계산되어
+ * 이 요소가 스크롤 컨테이너가 되는데, 높이 제한이 없어 실제로는 스크롤이
+ * 일어나지 않는다. 그 상태에서 thead 의 position: sticky 는 "자신을 감싼
+ * 스크롤 컨테이너"를 기준으로 삼지만 그 컨테이너 자체가 페이지와 함께
+ * 흘러가 버려서 아무 효과가 없다. 높이를 명시적으로 제한해 진짜
+ * 스크롤 영역으로 만들어야 sticky 헤더가 실제로 붙는다.
+ */
+.tablewrap { overflow: auto; max-height: min(620px, 68vh); }
 table.kw { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; }
 table.kw th, table.kw td { padding: 9px 12px; text-align: right; white-space: nowrap; border-bottom: 1px solid var(--border); }
 table.kw th {
@@ -209,7 +217,13 @@ table.kw tr.seed:hover { background: var(--accent-soft); }
 .grade.나쁨 { background: var(--g-bad); }
 .grade.최악 { background: var(--g-worst); }
 
-.star { cursor: pointer; background: none; border: none; padding: 0 2px; font-size: 15px; line-height: 1; color: var(--text-3); }
+.star {
+  cursor: pointer; background: none; border: none; border-radius: 6px;
+  font-size: 16px; line-height: 1; color: var(--text-3);
+  display: inline-flex; align-items: center; justify-content: center;
+  min-width: 32px; min-height: 32px;
+}
+.star:hover { background: var(--surface-2); }
 .star.on { color: #f59e0b; }
 
 .catcell { font-size: 12px; color: var(--text-2); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
@@ -304,6 +318,15 @@ table.kw tr.seed:hover { background: var(--accent-soft); }
   .topbar-inner { padding: 12px; }
   .stat-value { font-size: 20px; }
   table.kw th, table.kw td { padding: 8px 9px; font-size: 13px; }
+
+  /* PC/모바일 분리값·순위·광고는 총검색수·문서수·경쟁강도만으로도 판단 가능한
+     보조 지표라 좁은 화면에서는 숨겨 가로 스크롤을 없앤다. */
+  table.kw .col-lowpri { display: none; }
+  table.kw .kwname {
+    display: inline-block; max-width: 66px; overflow: hidden;
+    text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
+  }
+  table.kw td.col-star { padding-left: 4px; padding-right: 4px; }
 }
 
 .srow { display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
