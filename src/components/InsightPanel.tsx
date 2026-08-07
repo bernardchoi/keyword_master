@@ -10,7 +10,10 @@ function DualTrend({ search, shopping }: { search: TrendPoint[]; shopping: Trend
   const H = 150;
   const PAD = 8;
 
-  const line = (points: TrendPoint[]) => {
+  const line = (input: TrendPoint[]) => {
+    // 진행 중인 달은 며칠치뿐이라 마지막이 뚝 떨어진 것처럼 보인다.
+    // 여기는 두 곡선의 '모양'을 비교하는 자리라 아예 뺀다.
+    const points = input.filter((p) => !p.partial);
     if (points.length < 2) return '';
     const max = Math.max(...points.map((p) => p.ratio), 1);
     const x = (i: number) => PAD + (i * (W - PAD * 2)) / (points.length - 1);
@@ -44,6 +47,7 @@ function DualTrend({ search, shopping }: { search: TrendPoint[]; shopping: Trend
       <p className="footnote" style={{ marginTop: 4 }}>
         둘 다 각자의 최댓값을 100으로 한 상대 지수라 <strong>모양(방향)만 비교</strong>하세요.
         통합검색은 느는데 쇼핑이 정체라면 구매 의도보다 정보 탐색이 늘어난 것입니다.
+        진행 중인 이번 달은 집계가 끝나지 않아 제외했습니다.
       </p>
     </div>
   );

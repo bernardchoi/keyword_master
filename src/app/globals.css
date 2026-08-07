@@ -226,7 +226,6 @@ table.kw tr.seed:hover { background: var(--accent-soft); }
 .star:hover { background: var(--surface-2); }
 .star.on { color: #f59e0b; }
 
-.catcell { font-size: 12px; color: var(--text-2); max-width: 240px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 
 /* ─── 알림 ─────────────────────────────────────────────────── */
 .notice {

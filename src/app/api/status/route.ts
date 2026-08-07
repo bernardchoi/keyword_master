@@ -14,9 +14,8 @@ export function GET() {
     openApi: provider !== null,
     /** 'apihub' = NAVER API HUB(NCP), 'legacy' = developers.naver.com */
     provider,
-    /** 쇼핑(상품) 검색 지원 여부 — API HUB 에는 없다 */
-    shopSearch: provider === 'legacy',
     demo: !searchAd,
-    enrichLimit: Number(process.env.KM_ENRICH_LIMIT ?? 20),
+    /** 문서수를 붙일 최대 행 수. 지정하지 않으면 표시하는 행 전부에 붙인다. */
+    enrichLimit: process.env.KM_ENRICH_LIMIT ? Number(process.env.KM_ENRICH_LIMIT) : null,
   });
 }

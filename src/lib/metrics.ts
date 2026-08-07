@@ -12,63 +12,28 @@ const BLOG_GRADES: [number, Grade][] = [
   [Infinity, '최악'],
 ];
 
-const SHOP_GRADES: [number, Grade][] = [
-  [0.5, '최고'],
-  [2, '좋음'],
-  [10, '보통'],
-  [50, '나쁨'],
-  [Infinity, '최악'],
-];
-
 function grade(ratio: number, table: [number, Grade][]): Grade {
   for (const [limit, g] of table) if (ratio <= limit) return g;
   return '최악';
 }
 
+/**
+ * 분모(월간 검색수)가 마스킹된 상한값이면 나온 경쟁강도는 **하한**이다.
+ * 예를 들어 검색수가 `< 10` 인데 문서가 500건이면 실제 경쟁강도는 50 이 아니라 50 이상이고,
+ * 등급도 표시된 것보다 나쁠 수 있다. 이 사실을 값에 실어 보내 화면에서 `≥` 로 밝힌다.
+ */
 export function computeCompetition(
   metric: KeywordMetric,
   docs: DocCounts,
 ): Competition {
   const searches = Math.max(metric.totalSearches, 1);
   const ratio = docs.blog / searches;
-  const shopRatio = docs.shop === null ? null : docs.shop / searches;
 
   return {
     ratio,
     grade: grade(ratio, BLOG_GRADES),
-    shopRatio,
-    shopGrade: shopRatio === null ? null : grade(shopRatio, SHOP_GRADES),
+    lowerBound: metric.masked,
   };
-}
-
-export const GRADE_ORDER: Grade[] = ['최고', '좋음', '보통', '나쁨', '최악'];
-
-/** 등급을 0~100 점수로 (정렬/색상용) */
-export function gradeScore(g: Grade): number {
-  const idx = GRADE_ORDER.indexOf(g);
-  return idx < 0 ? 0 : Math.round(((GRADE_ORDER.length - 1 - idx) / (GRADE_ORDER.length - 1)) * 100);
-}
-
-/**
- * "황금 키워드" 점수 — 검색량은 많고 경쟁은 적은 키워드를 위로 올리기 위한 종합 지표.
- * log 스케일 검색량 × 경쟁 등급 가중치.
- */
-export function goldenScore(metric: KeywordMetric, comp: Competition | null): number {
-  const volume = Math.log10(Math.max(metric.totalSearches, 1) + 1) / 6; // 0~1 근사
-  if (!comp) return Math.round(volume * 50);
-  const compFactor = 1 / (1 + comp.ratio); // ratio 0 → 1, ratio 5 → 0.17
-  return Math.round(volume * compFactor * 100);
-}
-
-export function formatRatio(ratio: number): string {
-  if (!Number.isFinite(ratio)) return '-';
-  if (ratio >= 100) return ratio.toFixed(0);
-  if (ratio >= 10) return ratio.toFixed(1);
-  return ratio.toFixed(2);
-}
-
-export function formatNumber(n: number): string {
-  return n.toLocaleString('ko-KR');
 }
 
 /** 동시 실행 개수를 제한한 map. 오픈 API 초당 호출 제한 대응. */

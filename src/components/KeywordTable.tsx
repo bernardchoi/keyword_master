@@ -6,15 +6,13 @@ import { compact, n, pct, ratio } from '@/lib/format';
 
 type SortKey =
   | 'rank' | 'keyword' | 'pcSearches' | 'mobileSearches' | 'totalSearches'
-  | 'mobileShare' | 'blog' | 'comp' | 'shop' | 'shopComp' | 'adDepth';
+  | 'mobileShare' | 'blog' | 'comp' | 'adDepth';
 
 interface Column {
   key: SortKey;
   label: string;
   align?: 'left';
   title?: string;
-  /** 쇼핑 검색을 쓸 수 있을 때만 보이는 열 */
-  shopOnly?: boolean;
   /** 좁은 화면에서는 숨긴다 (총검색수·문서수·경쟁강도로도 판단 가능한 보조 지표) */
   mobileHide?: boolean;
 }
@@ -28,8 +26,6 @@ const COLUMNS: Column[] = [
   { key: 'mobileShare', label: '모바일%', title: '전체 검색 중 모바일 비중', mobileHide: true },
   { key: 'blog', label: '문서수', title: '블로그 발행 문서수 (따옴표 정확일치 기준)' },
   { key: 'comp', label: '경쟁강도', title: '블로그 문서수 ÷ 월간 검색수 (낮을수록 유리)' },
-  { key: 'shop', label: '상품수', title: '네이버 쇼핑 등록 상품수', shopOnly: true },
-  { key: 'shopComp', label: '쇼핑경쟁', title: '쇼핑 상품수 ÷ 월간 검색수', shopOnly: true },
   { key: 'adDepth', label: '광고', title: '광고 경쟁정도 / 월평균 노출 광고수', mobileHide: true },
 ];
 
@@ -41,9 +37,7 @@ function valueOf(row: KeywordRow, key: SortKey): number | string {
   switch (key) {
     case 'keyword': return row.keyword;
     case 'blog': return row.docs?.blog ?? -1;
-    case 'shop': return row.docs?.shop ?? -1;
     case 'comp': return row.competition?.ratio ?? Number.MAX_SAFE_INTEGER;
-    case 'shopComp': return row.competition?.shopRatio ?? Number.MAX_SAFE_INTEGER;
     default: return row[key] as number;
   }
 }
@@ -52,16 +46,9 @@ interface Props {
   rows: KeywordRow[];
   isFavorite: (keyword: string) => boolean;
   onToggleFavorite: (row: KeywordRow) => void;
-  /** 쇼핑 검색을 쓸 수 없으면 상품수·쇼핑경쟁·카테고리 열을 통째로 숨긴다 */
-  showShop?: boolean;
 }
 
-export default function KeywordTable({
-  rows,
-  isFavorite,
-  onToggleFavorite,
-  showShop = false,
-}: Props) {
+export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'rank', dir: 1 });
 
   const sorted = useMemo(() => {
@@ -81,7 +68,7 @@ export default function KeywordTable({
     setSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === 1 ? -1 : 1 }
-        : { key, dir: key === 'rank' || key === 'keyword' || key === 'comp' || key === 'shopComp' ? 1 : -1 },
+        : { key, dir: key === 'rank' || key === 'keyword' || key === 'comp' ? 1 : -1 },
     );
   };
 
@@ -91,7 +78,7 @@ export default function KeywordTable({
         <thead>
           <tr>
             <th aria-label="즐겨찾기" style={{ cursor: 'default', width: 44 }} />
-            {COLUMNS.filter((c) => showShop || !c.shopOnly).map((c) => (
+            {COLUMNS.map((c) => (
               <th
                 key={c.key}
                 className={cx(c.align === 'left' && 'left', c.mobileHide && 'col-lowpri')}
@@ -102,7 +89,6 @@ export default function KeywordTable({
                 {sort.key === c.key && <span className="sortmark">{sort.dir === 1 ? '▲' : '▼'}</span>}
               </th>
             ))}
-            {showShop && <th className="left" style={{ cursor: 'default' }}>대표 카테고리</th>}
           </tr>
         </thead>
         <tbody>
@@ -124,59 +110,47 @@ export default function KeywordTable({
                 <td className="muted col-lowpri">{row.rank}</td>
                 <td className="left">
                   <span className="kwname">{row.keyword}</span>
-                  {row.masked && <span className="muted" title="네이버가 10 미만 값을 마스킹함"> *</span>}
+                  {row.masked && (
+                    <span
+                      className="muted"
+                      title="네이버가 10 미만 검색수를 마스킹한 키워드입니다. 검색수는 실측치가 아니라 상한이라 실제 값은 더 작을 수 있습니다."
+                    >
+                      {' '}*
+                    </span>
+                  )}
                 </td>
                 <td className="col-lowpri">{n(row.pcSearches)}</td>
                 <td className="col-lowpri">{n(row.mobileSearches)}</td>
-                <td><strong>{n(row.totalSearches)}</strong></td>
+                {/* 마스킹된 값은 상한이므로 숫자를 단정하지 않고 `<` 로 적는다 */}
+                <td>
+                  {row.masked && <span className="muted">&lt; </span>}
+                  <strong>{n(row.totalSearches)}</strong>
+                </td>
                 <td className="muted col-lowpri">{pct(row.mobileShare, 0)}</td>
                 <td>{row.docs ? compact(row.docs.blog) : <span className="muted">–</span>}</td>
-                <td>
+                <td
+                  title={
+                    row.competition?.lowerBound
+                      ? '검색수가 마스킹된 키워드라 분모가 상한값입니다. 실제 경쟁강도는 이보다 높고 등급도 더 나쁠 수 있습니다.'
+                      : undefined
+                  }
+                >
                   {row.competition ? (
                     <>
-                      <span style={{ marginRight: 6 }}>{ratio(row.competition.ratio)}</span>
+                      <span style={{ marginRight: 6 }}>
+                        {row.competition.lowerBound && <span className="muted">≥ </span>}
+                        {ratio(row.competition.ratio)}
+                      </span>
                       <span className={`grade ${row.competition.grade}`}>{row.competition.grade}</span>
                     </>
                   ) : (
                     <span className="muted">–</span>
                   )}
                 </td>
-                {showShop && (
-                  <>
-                    <td>
-                      {row.docs && row.docs.shop !== null ? (
-                        compact(row.docs.shop)
-                      ) : (
-                        <span className="muted">–</span>
-                      )}
-                    </td>
-                    <td>
-                      {row.competition?.shopGrade ? (
-                        <span className={`grade ${row.competition.shopGrade}`}>
-                          {row.competition.shopGrade}
-                        </span>
-                      ) : (
-                        <span className="muted">–</span>
-                      )}
-                    </td>
-                  </>
-                )}
                 <td className="muted col-lowpri">
                   {row.compIdx}
                   {row.adDepth > 0 && <span> · {row.adDepth}</span>}
                 </td>
-                {showShop && (
-                  <td className="left catcell" title={row.category?.path ?? ''}>
-                    {row.category ? (
-                      <>
-                        {row.category.path}
-                        <span className="muted"> ({Math.round(row.category.confidence * 100)}%)</span>
-                      </>
-                    ) : (
-                      <span className="muted">–</span>
-                    )}
-                  </td>
-                )}
               </tr>
             );
           })}

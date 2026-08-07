@@ -3,7 +3,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import KeywordTable from '@/components/KeywordTable';
 import SummaryCards from '@/components/SummaryCards';
-import CategoryGroups from '@/components/CategoryGroups';
 import CategoryExplorer from '@/components/CategoryExplorer';
 import TagChecker from '@/components/TagChecker';
 import RankChecker from '@/components/RankChecker';
@@ -33,11 +32,7 @@ export default function Home() {
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
-  const [status, setStatus] = useState<{
-    searchAd: boolean;
-    openApi: boolean;
-    shopSearch: boolean;
-  } | null>(null);
+  const [status, setStatus] = useState<{ searchAd: boolean; openApi: boolean } | null>(null);
 
   const favorites = useFavorites();
 
@@ -62,7 +57,7 @@ export default function Home() {
       const res = await fetch('/api/analyze', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ keyword: kw, limit: 60 }),
+        body: JSON.stringify({ keyword: kw, limit: 100 }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '분석에 실패했습니다.');
@@ -200,8 +195,17 @@ export default function Home() {
                 <div className="card-head">
                   <div>
                     <h2 className="card-title">연관 키워드 {data.rows.length}개</h2>
+                    {/* 잘라서 보여 준다는 사실을 감추지 않는다 — 검색광고 API 는 보통
+                        수백 개를 돌려주고, 그중 검색량 상위만 표에 올라간다. */}
                     <p className="card-sub">
-                      상위 {data.enriched}개는 문서수·경쟁강도·카테고리까지 분석했습니다 · 헤더를 눌러 정렬
+                      {data.totalRelated > data.rows.length
+                        ? `검색광고 API 가 돌려준 ${data.totalRelated.toLocaleString('ko-KR')}개 중 검색량 상위 ${data.rows.length}개`
+                        : `검색광고 API 가 돌려준 ${data.rows.length}개 전부`}
+                      {' · '}
+                      {data.enriched === data.rows.length
+                        ? '문서수·경쟁강도까지 분석 완료'
+                        : `${data.enriched}개에 문서수·경쟁강도 표시`}
+                      {' · 헤더를 눌러 정렬'}
                     </p>
                   </div>
                   <span className="spacer" />
@@ -211,14 +215,15 @@ export default function Home() {
                   rows={data.rows}
                   isFavorite={favorites.has}
                   onToggleFavorite={favorites.toggle}
-                  showShop={status?.shopSearch ?? false}
                 />
                 <div className="card-pad" style={{ paddingTop: 12 }}>
                   <p className="footnote">
                     <strong>경쟁강도</strong> = 블로그 발행 문서수 ÷ 월간 검색수. 1보다 작으면 검색량 대비
                     문서가 적다는 뜻이라 상위 노출이 상대적으로 쉽습니다.
                     <br />
-                    <strong>*</strong> 표시는 네이버가 검색수를 10 미만으로 마스킹한 키워드입니다.
+                    <strong>*</strong> 표시는 네이버가 검색수를 10 미만으로 마스킹한 키워드입니다. 검색수는
+                    실측치가 아니라 상한(<code>&lt;</code>)이고, 그 때문에 경쟁강도도 하한(<code>≥</code>)으로
+                    적습니다 — 실제 경쟁은 표시된 것보다 심할 수 있습니다.
                   </p>
                 </div>
               </div>
@@ -234,14 +239,9 @@ export default function Home() {
         {tab === 'insight' && <InsightPanel keyword={data?.keyword ?? null} />}
 
         {/* ─── 카테고리 ─────────────────────────────────── */}
-        {/* 쇼핑 검색이 되는 구 플랫폼 키라면 상품 카테고리로 바로 묶고,
-            그렇지 않으면 쇼핑인사이트로 역추정하는 온디맨드 분류를 쓴다. */}
-        {tab === 'category' &&
-          (data && data.groups.length > 0 ? (
-            <CategoryGroups data={data} onPick={pick} />
-          ) : (
-            <CategoryExplorer rows={data?.rows ?? []} onPick={pick} />
-          ))}
+        {/* 상품 검색 API 가 없으므로 카테고리는 쇼핑인사이트로 역추정한다.
+            키워드당 11회 호출이라 버튼을 눌렀을 때만 돈다. */}
+        {tab === 'category' && <CategoryExplorer rows={data?.rows ?? []} onPick={pick} />}
 
         {/* ─── 태그 검사 ────────────────────────────────── */}
         {tab === 'tag' && <TagChecker initialTags={data?.keyword ?? ''} />}
@@ -289,7 +289,6 @@ export default function Home() {
                 rows={favorites.list}
                 isFavorite={favorites.has}
                 onToggleFavorite={favorites.toggle}
-                showShop={status?.shopSearch ?? false}
               />
             )}
           </div>

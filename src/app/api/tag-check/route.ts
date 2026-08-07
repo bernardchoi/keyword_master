@@ -1,11 +1,11 @@
 import { NextResponse } from 'next/server';
-import { fetchShopInsight, fetchTrend, hasOpenApiCreds } from '@/lib/openapi';
+import { fetchTrend, hasOpenApiCreds } from '@/lib/openapi';
 import { computeSeasonality } from '@/lib/seasonality';
 import { fetchKeywordTool, hasSearchAdCreds } from '@/lib/searchad';
 import { checkShoppingTag } from '@/lib/tag-rules';
-import { demoCategory, demoDocs, demoMetrics } from '@/lib/demo';
+import { demoMetrics } from '@/lib/demo';
 import { mapLimit } from '@/lib/metrics';
-import type { CategoryInfo, Seasonality, TagCheckResult } from '@/lib/types';
+import type { Seasonality, TagCheckResult } from '@/lib/types';
 
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
@@ -32,29 +32,13 @@ export async function POST(req: Request) {
   const demoMode = !hasOpenApiCreds();
   const hasAd = hasSearchAdCreds();
 
-  const errors: string[] = [];
-
   const results = await mapLimit<string, TagCheckResult>(tags, 4, async (tag) => {
-    let shopTotal: number | null = null;
-    let category: CategoryInfo | null = null;
     let monthlySearches: number | null = null;
     let seasonality: Seasonality | null = null;
 
     if (demoMode) {
-      const m = demoMetrics(tag, 1)[0];
-      monthlySearches = m.totalSearches;
-      shopTotal = demoDocs(tag, m.totalSearches).shop;
-      category = demoCategory(tag);
+      monthlySearches = demoMetrics(tag, 1)[0].totalSearches;
     } else {
-      try {
-        const insight = await fetchShopInsight(tag, 100);
-        shopTotal = insight.total;
-        category = insight.category;
-      } catch (err) {
-        // 상품수를 0 으로 두면 "검색되는 상품이 없다"는 잘못된 경고가 뜬다.
-        errors.push(err instanceof Error ? err.message : String(err));
-      }
-
       if (hasAd) {
         const metrics = await fetchKeywordTool([tag]).catch(() => []);
         const exact = metrics.find(
@@ -70,25 +54,16 @@ export async function POST(req: Request) {
 
     return checkShoppingTag({
       tag,
-      shopTotal,
-      category,
       monthlySearches,
       seasonality,
       ownBrands: body.ownBrands ?? [],
     });
   });
 
-  const hint = errors.some((e) => /401|403/.test(e))
-    ? ' 네이버 개발자센터 > 내 애플리케이션 > API 설정에서 "검색" API를 사용 API 에 추가했는지 확인하세요.'
-    : '';
-
   return NextResponse.json({
     results,
     demo: demoMode,
-    warning: errors.length
-      ? `쇼핑 데이터를 가져오지 못해 형식 규칙만 검사했습니다.${hint} 원인: ${errors[0]}`
-      : undefined,
     disclaimer:
-      '네이버는 태그 등록 가능 여부를 조회하는 공개 API 를 제공하지 않습니다. 이 결과는 스마트스토어 상품등록 정책과 실제 쇼핑 검색 데이터를 근거로 한 추정이며, 최종 확인은 스마트스토어 상품등록 화면에서 하셔야 합니다.',
+      '네이버는 태그 등록 가능 여부를 조회하는 공개 API 를 제공하지 않습니다. 이 결과는 스마트스토어 상품등록 정책, 월간 검색수, 3년치 추이로 계산한 시즌성을 근거로 한 추정이며, 최종 확인은 스마트스토어 상품등록 화면에서 하셔야 합니다. 등록 상품수·카테고리는 네이버가 쇼핑(상품) 검색 API 를 제공하지 않아 근거로 쓸 수 없습니다.',
   });
 }

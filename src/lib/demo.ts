@@ -1,4 +1,4 @@
-import type { CategoryInfo, DocCounts, KeywordMetric, RankHit, TrendPoint } from './types';
+import type { DocCounts, KeywordMetric, RankHit, TrendPoint } from './types';
 
 /**
  * API 키가 없을 때 앱이 그대로 돌아가도록 하는 결정적(deterministic) 가짜 데이터.
@@ -29,18 +29,6 @@ const MODIFIERS = [
   '추천', '가격', '후기', '순위', '비교', '브랜드', '싼곳', '세트', '선물',
   '남자', '여자', '어린이', '대용량', '미니', '휴대용', '국내산', '수입',
   '1인용', '2인용', '온라인', '오프라인', '매장', '직구', '정품', '신상',
-];
-
-const CATEGORY_POOL: string[] = [
-  '패션의류 > 여성의류 > 원피스',
-  '패션잡화 > 가방 > 백팩',
-  '화장품/미용 > 스킨케어 > 에센스',
-  '식품 > 건강식품 > 홍삼',
-  '디지털/가전 > 주방가전 > 커피머신',
-  '가구/인테리어 > 침구 > 이불',
-  '출산/육아 > 유아용품 > 젖병',
-  '스포츠/레저 > 캠핑 > 텐트',
-  '생활/건강 > 반려동물 > 사료',
 ];
 
 export function demoMetrics(seed: string, count = 40): KeywordMetric[] {
@@ -87,24 +75,7 @@ export function demoMetrics(seed: string, count = 40): KeywordMetric[] {
 
 export function demoDocs(keyword: string, searches: number): DocCounts {
   const r = rng(hash(keyword + ':docs'));
-  return {
-    blog: Math.round(searches * (0.05 + r() * 4)),
-    shop: Math.round(searches * (0.1 + r() * 20)),
-  };
-}
-
-export function demoCategory(keyword: string): CategoryInfo {
-  const r = rng(hash(keyword + ':cat'));
-  const path = CATEGORY_POOL[Math.floor(r() * CATEGORY_POOL.length)];
-  const alt = CATEGORY_POOL.filter((p) => p !== path).slice(0, 3);
-  return {
-    path,
-    depth1: path.split(' > ')[0],
-    confidence: 0.4 + r() * 0.55,
-    alternatives: alt.map((p) => ({ path: p, ratio: Math.round(r() * 25) / 100 })),
-    avgPrice: Math.round((5000 + r() * 200000) / 100) * 100,
-    minPrice: Math.round((1000 + r() * 20000) / 100) * 100,
-  };
+  return { blog: Math.round(searches * (0.05 + r() * 4)) };
 }
 
 export function demoTrend(keyword: string, months = 12): TrendPoint[] {
@@ -115,7 +86,14 @@ export function demoTrend(keyword: string, months = 12): TrendPoint[] {
   for (let i = months - 1; i >= 0; i--) {
     const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
     level = Math.max(5, Math.min(100, level + (r() - 0.45) * 25));
-    out.push({ period: d.toISOString().slice(0, 10), ratio: Math.round(level * 10) / 10 });
+    const period = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-01`;
+    // 실제 응답과 같은 모양으로 — 마지막 달은 진행 중이라 값이 낮게 잡힌다.
+    const partial = i === 0;
+    out.push({
+      period,
+      ratio: Math.round((partial ? level * 0.3 : level) * 10) / 10,
+      partial,
+    });
   }
   return out;
 }

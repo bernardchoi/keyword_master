@@ -1,3 +1,4 @@
+import { kstToday } from './date';
 import type { NewsPulse, Seasonality, TrendPoint } from './types';
 
 /**
@@ -8,11 +9,15 @@ import type { NewsPulse, Seasonality, TrendPoint } from './types';
  * 실제 추이로 계산하면 그런 키워드도 잡힌다.
  */
 export function computeSeasonality(points: TrendPoint[]): Seasonality | null {
-  if (points.length < 12) return null;
+  // 진행 중인 달은 며칠치만 집계된 값이라 같은 달의 예년 값과 평균 낼 수 없다.
+  // 그대로 두면 이번 달 지수가 눌려, 실제로는 성수기인데 '비수기'로 뒤집힌다.
+  // (실측: 8월 7일에 조회한 `수영복` — 7월 47.7 → 8월 9.9)
+  const complete = points.filter((p) => !p.partial);
+  if (complete.length < 12) return null;
 
   // 같은 달끼리 묶어 평균 — 연도 간 편차를 눌러 계절 패턴만 남긴다
   const buckets = new Map<number, number[]>();
-  for (const p of points) {
+  for (const p of complete) {
     const month = Number(p.period.slice(5, 7));
     if (!month) continue;
     const arr = buckets.get(month) ?? [];
@@ -44,7 +49,8 @@ export function computeSeasonality(points: TrendPoint[]): Seasonality | null {
   const level: Seasonality['level'] =
     amplitude >= 0.25 ? '뚜렷' : amplitude >= 0.15 ? '보통' : '없음';
 
-  const thisMonth = new Date().getMonth() + 1;
+  // 이번 달 판정은 '예년 같은 달' 평균으로 한다 — 진행 중인 이번 달 값은 위에서 뺐다.
+  const thisMonth = kstToday().month;
   const current = monthly.find((m) => m.month === thisMonth)?.index ?? mean;
   const currentPhase: Seasonality['currentPhase'] =
     level === '없음'

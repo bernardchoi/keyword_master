@@ -2,12 +2,11 @@
 
 import { useState } from 'react';
 import type { RankResult } from '@/lib/types';
-import { won } from '@/lib/format';
 
 export default function RankChecker({ initialKeyword = '' }: { initialKeyword?: string }) {
   const [keyword, setKeyword] = useState(initialKeyword);
   const [target, setTarget] = useState('');
-  const [source, setSource] = useState<'blog' | 'cafe' | 'shop'>('blog');
+  const [source, setSource] = useState<'blog' | 'cafe'>('blog');
   const [depth, setDepth] = useState(300);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -42,7 +41,7 @@ export default function RankChecker({ initialKeyword = '' }: { initialKeyword?: 
         <div className="card-head">
           <div>
             <h2 className="card-title">순위 조회</h2>
-            <p className="card-sub">특정 키워드 검색 결과에서 내 블로그·카페 글·스토어가 몇 번째인지 확인합니다</p>
+            <p className="card-sub">특정 키워드 검색 결과에서 내 블로그·카페 글이 몇 번째인지 확인합니다</p>
           </div>
         </div>
         <div className="card-pad">
@@ -65,7 +64,7 @@ export default function RankChecker({ initialKeyword = '' }: { initialKeyword?: 
                 className="input"
                 value={target}
                 onChange={(e) => setTarget(e.target.value)}
-                placeholder="블로그 ID, 스토어명, 도메인"
+                placeholder="블로그 ID, 카페명, 도메인"
                 onKeyDown={(e) => e.key === 'Enter' && run()}
               />
             </div>
@@ -82,7 +81,6 @@ export default function RankChecker({ initialKeyword = '' }: { initialKeyword?: 
               >
                 <option value="blog">블로그</option>
                 <option value="cafe">카페</option>
-                <option value="shop">쇼핑</option>
               </select>
             </div>
             <div className="field">
@@ -136,7 +134,6 @@ export default function RankChecker({ initialKeyword = '' }: { initialKeyword?: 
                       <div className="muted" style={{ fontSize: 12 }}>
                         {h.owner}
                         {h.postdate && ` · ${h.postdate.slice(0, 4)}.${h.postdate.slice(4, 6)}.${h.postdate.slice(6, 8)}`}
-                        {h.price ? ` · ${won(h.price)}` : ''}
                       </div>
                     </span>
                   </li>

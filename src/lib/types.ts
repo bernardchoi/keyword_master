@@ -21,46 +21,40 @@ export interface KeywordMetric {
   adDepth: number;
   /** 광고 경쟁정도: 높음 / 중간 / 낮음 */
   compIdx: string;
-  /** 검색수가 "< 10" 으로 마스킹되어 온 경우 true */
+  /**
+   * 검색수가 `"< 10"` 으로 마스킹되어 온 경우 true.
+   * 이때 PC·모바일 값은 실측치가 아니라 **상한(각 10)** 이므로
+   * totalSearches 는 "이 값 미만"으로 읽어야 한다.
+   */
   masked: boolean;
 }
 
 /**
  * 네이버 검색 API 로 얻은 발행 문서수.
- * 카페는 제외했다 — 카페 검색은 따옴표(정확일치)를 무시해서 나온 수치가
- * 해당 키워드를 노린 글 수가 아니며, 블로그 수치와 나란히 두면 오해를 부른다.
+ *
+ * 블로그만 센다.
+ * - 카페: 따옴표(정확일치)를 무시해서 나온 수치가 해당 키워드를 노린 글 수가 아니다.
+ * - 쇼핑: 네이버가 상품 검색 API 자체를 내렸다 — API HUB 에도, 구 developers.naver.com
+ *   키에도 없다. 조회할 방법이 없으므로 상품수·쇼핑 경쟁도는 다루지 않는다.
  */
 export interface DocCounts {
   blog: number;
-  /** 쇼핑 상품수. NAVER API HUB 에는 쇼핑 검색이 없어 null 이 될 수 있다. */
-  shop: number | null;
 }
 
 export interface Competition {
   /** 블로그 문서수 ÷ 월간 검색수. 낮을수록 유리 */
   ratio: number;
   grade: Grade;
-  /** 쇼핑 상품수 ÷ 월간 검색수. 쇼핑 데이터가 없으면 null */
-  shopRatio: number | null;
-  shopGrade: Grade | null;
-}
-
-export interface CategoryInfo {
-  /** "패션의류 > 여성의류 > 원피스" */
-  path: string;
-  depth1: string;
-  /** 상위 상품 중 이 카테고리 비율 0~1 */
-  confidence: number;
-  alternatives: { path: string; ratio: number }[];
-  /** 상위 상품 평균/최저 가격 (원) */
-  avgPrice: number;
-  minPrice: number;
+  /**
+   * 검색수가 마스킹된 키워드라 분모가 상한값이다.
+   * 실제 경쟁강도는 이 값 **이상**이고 등급은 이보다 나쁠 수 있다.
+   */
+  lowerBound: boolean;
 }
 
 export interface KeywordRow extends KeywordMetric {
   docs: DocCounts | null;
   competition: Competition | null;
-  category: CategoryInfo | null;
   /** 연관 키워드 목록에서의 순위 (검색량 기준 1위부터) */
   rank: number;
   /** 입력한 키워드 본인이면 true */
@@ -71,8 +65,11 @@ export interface AnalyzeResponse {
   keyword: string;
   seed: KeywordRow | null;
   rows: KeywordRow[];
-  /** 카테고리 path → 해당 카테고리에 속한 키워드들 */
-  groups: { path: string; depth1: string; keywords: string[]; totalSearches: number }[];
+  /**
+   * 검색광고 API 가 돌려준 연관 키워드 전체 개수.
+   * rows 는 이 중 검색량 상위 일부라, 잘렸다는 사실을 화면에 밝히기 위해 함께 보낸다.
+   */
+  totalRelated: number;
   demo: boolean;
   enriched: number;
   tookMs: number;
@@ -82,6 +79,11 @@ export interface AnalyzeResponse {
 export interface TrendPoint {
   period: string;
   ratio: number;
+  /**
+   * 아직 끝나지 않은 달. 지나간 며칠치만 집계된 값이라 다른 달과 비교할 수 없다.
+   * 차트에는 구분해서 그리고, 시즌성 계산에서는 뺀다.
+   */
+  partial?: boolean;
 }
 
 // ─── 쇼핑인사이트 기반 지표 ────────────────────────────────────
@@ -161,8 +163,6 @@ export interface TagCheckResult {
   score: number;
   issues: TagCheckIssue[];
   evidence: {
-    shopTotal: number | null;
-    category: CategoryInfo | null;
     monthlySearches: number | null;
   };
 }
@@ -173,13 +173,12 @@ export interface RankHit {
   link: string;
   owner: string;
   postdate?: string;
-  price?: number;
 }
 
 export interface RankResult {
   keyword: string;
   target: string;
-  source: 'blog' | 'shop' | 'cafe';
+  source: 'blog' | 'cafe';
   scanned: number;
   hits: RankHit[];
   demo: boolean;

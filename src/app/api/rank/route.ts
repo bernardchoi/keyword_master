@@ -6,7 +6,8 @@ import type { RankResult } from '@/lib/types';
 export const runtime = 'nodejs';
 export const dynamic = 'force-dynamic';
 
-const KINDS = { blog: 'blog', cafe: 'cafearticle', shop: 'shop' } as const;
+/** 쇼핑은 없다 — 네이버가 상품 검색 API 를 제공하지 않는다. */
+const KINDS = { blog: 'blog', cafe: 'cafearticle' } as const;
 
 export async function POST(req: Request) {
   let body: { keyword?: string; target?: string; source?: keyof typeof KINDS; depth?: number };
@@ -24,7 +25,7 @@ export async function POST(req: Request) {
   if (!keyword) return NextResponse.json({ error: '키워드를 입력해 주세요.' }, { status: 400 });
   if (!target) {
     return NextResponse.json(
-      { error: '찾을 대상(블로그 ID, 스토어명, 도메인)을 입력해 주세요.' },
+      { error: '찾을 대상(블로그 ID, 카페명, 도메인)을 입력해 주세요.' },
       { status: 400 },
     );
   }

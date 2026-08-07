@@ -1,6 +1,8 @@
 import { cached } from './cache';
+import { isPartialMonth, monthRange } from './date';
 import { getProvider, shoppingInsightUrl } from './openapi';
 import { mapLimit } from './metrics';
+import { withRetry } from './ratelimit';
 import type { AgeShare, CategoryCandidate, GenderSplit, TrendPoint } from './types';
 
 const TTL = Number(process.env.KM_CACHE_TTL ?? 21600) * 1000;
@@ -35,36 +37,14 @@ interface InsightResponse {
   results?: { title: string; keyword?: string[]; data?: InsightPoint[] }[];
 }
 
-function monthRange(months: number): { startDate: string; endDate: string; timeUnit: 'month' } {
-  const end = new Date();
-  const start = new Date(end);
-  start.setMonth(start.getMonth() - months);
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  return { startDate: fmt(start), endDate: fmt(end), timeUnit: 'month' };
-}
-
 /**
- * API HUB 는 API 키당 50 RPS 제한이 있다.
- * 카테고리 추정은 키워드 하나에 11회를 몰아 쏘기 때문에 제한을 넘기기 쉬운데,
- * 넘긴 호출이 조용히 "데이터 0개월"로 취급되면 엉뚱한 카테고리가 1위가 된다.
- * (실제로 `강아지사료` 가 패션잡화로 분류됐다.)
- * 그래서 호출 시작 간격을 벌려 한도의 절반 아래로 유지한다.
+ * 카테고리 추정은 키워드 하나에 11회를 몰아 쏜다. 한도(키당 50 RPS)를 넘긴 호출이
+ * 조용히 "데이터 0개월"로 취급되면 엉뚱한 카테고리가 1위가 되므로
+ * (실제로 `강아지사료` 가 패션잡화로 분류됐다) 호출은 공용 게이트를 지나며,
+ * 429·5xx 는 재시도한다. 게이트는 검색 API 와 공유한다 — 한도가 키 단위라
+ * 키워드 분석과 카테고리 분류가 겹쳐 돌면 합계로 한도를 넘기기 때문이다.
  */
-const MIN_GAP_MS = 40; // ≈ 25 RPS
-let gate: Promise<void> = Promise.resolve();
-let lastStart = 0;
-
-function schedule<T>(fn: () => Promise<T>): Promise<T> {
-  const slot = gate.then(async () => {
-    const wait = lastStart + MIN_GAP_MS - Date.now();
-    if (wait > 0) await new Promise((r) => setTimeout(r, wait));
-    lastStart = Date.now();
-  });
-  gate = slot;
-  return slot.then(fn);
-}
-
-async function post(path: string, body: unknown, attempt = 0): Promise<InsightResponse> {
+async function post(path: string, body: unknown): Promise<InsightResponse> {
   const provider = getProvider();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
 
@@ -76,7 +56,7 @@ async function post(path: string, body: unknown, attempt = 0): Promise<InsightRe
     headers['X-Naver-Client-Secret'] = process.env.NAVER_CLIENT_SECRET!;
   }
 
-  const res = await schedule(() =>
+  const res = await withRetry(() =>
     fetch(shoppingInsightUrl(path), {
       method: 'POST',
       headers,
@@ -86,15 +66,18 @@ async function post(path: string, body: unknown, attempt = 0): Promise<InsightRe
   );
 
   if (!res.ok) {
-    // 호출 한도(429)나 일시적 5xx 는 물러섰다가 다시 시도한다.
-    if ((res.status === 429 || res.status >= 500) && attempt < 2) {
-      await new Promise((r) => setTimeout(r, 300 * (attempt + 1)));
-      return post(path, body, attempt + 1);
-    }
     const text = await res.text().catch(() => '');
     throw new Error(`쇼핑인사이트 API 오류 (${res.status}): ${text.slice(0, 200)}`);
   }
   return (await res.json()) as InsightResponse;
+}
+
+/**
+ * 진행 중인 달을 걷어낸다.
+ * 며칠치만 집계된 값이라 '데이터가 잡힌 개월 수'로도, 비중 계산의 분모로도 쓸 수 없다.
+ */
+function completeMonths(data: InsightPoint[]): InsightPoint[] {
+  return data.filter((d) => !isPartialMonth(d.period));
 }
 
 /**
@@ -120,7 +103,7 @@ export async function inferCategories(
           category: code,
           keyword: [{ name: keyword, param: [keyword] }],
         });
-        const data = json.results?.[0]?.data ?? [];
+        const data = completeMonths(json.results?.[0]?.data ?? []);
         const avg = data.length
           ? data.reduce((sum, d) => sum + d.ratio, 0) / data.length
           : 0;
@@ -174,7 +157,7 @@ export async function fetchGenderSplit(
   const range = monthRange(months);
   return cached(`gender:${category}:${keyword}:${range.startDate}`, TTL, async () => {
     const json = await post('/category/keyword/gender', { ...range, category, keyword });
-    const data = json.results?.[0]?.data ?? [];
+    const data = completeMonths(json.results?.[0]?.data ?? []);
     if (data.length === 0) return null;
     const share = shareByGroup(data);
     return { female: share.get('f') ?? 0, male: share.get('m') ?? 0 };
@@ -189,7 +172,7 @@ export async function fetchAgeSplit(
   const range = monthRange(months);
   return cached(`age:${category}:${keyword}:${range.startDate}`, TTL, async () => {
     const json = await post('/category/keyword/age', { ...range, category, keyword });
-    const data = json.results?.[0]?.data ?? [];
+    const data = completeMonths(json.results?.[0]?.data ?? []);
     if (data.length === 0) return [] as AgeShare[];
     const share = shareByGroup(data);
     return [...share.entries()]
@@ -214,6 +197,7 @@ export async function fetchShoppingTrend(
     return (json.results?.[0]?.data ?? []).map((d) => ({
       period: d.period,
       ratio: d.ratio,
+      partial: isPartialMonth(d.period),
     }));
   });
 }

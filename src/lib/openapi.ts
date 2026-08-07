@@ -1,5 +1,7 @@
 import { cached } from './cache';
-import type { CategoryInfo, RankHit, TrendPoint } from './types';
+import { formatYmd, isPartialMonth, monthsAgoStart, kstToday } from './date';
+import { withRetry } from './ratelimit';
+import type { RankHit, TrendPoint } from './types';
 
 const TTL = Number(process.env.KM_CACHE_TTL ?? 21600) * 1000;
 
@@ -73,28 +75,19 @@ export class OpenApiError extends Error {
   }
 }
 
-type SearchKind = 'blog' | 'cafearticle' | 'shop' | 'news' | 'webkr';
+/**
+ * 쇼핑(상품) 검색은 목록에 없다. 네이버가 상품 검색 API 를 내려서
+ * API HUB 에도, 구 developers.naver.com 키에도 없기 때문이다.
+ * 그래서 이 앱은 상품수·쇼핑 경쟁도·상품 카테고리를 아예 다루지 않는다.
+ * 쇼핑 쪽 신호가 필요하면 쇼핑인사이트(`lib/shopping-insight.ts`)를 쓴다.
+ */
+type SearchKind = 'blog' | 'cafearticle' | 'news' | 'webkr';
 
 interface SearchResponse<T> {
   total: number;
   start: number;
   display: number;
   items: T[];
-}
-
-interface ShopItem {
-  title: string;
-  link: string;
-  image: string;
-  lprice: string;
-  mallName: string;
-  productId: string;
-  brand: string;
-  maker: string;
-  category1: string;
-  category2: string;
-  category3: string;
-  category4: string;
 }
 
 interface BlogItem {
@@ -121,14 +114,6 @@ async function search<T>(
 ): Promise<SearchResponse<T>> {
   const provider = getProvider();
 
-  // API HUB 에는 쇼핑(상품) 검색이 없다. 0 으로 넘기면 "상품 없음"으로 오독되므로 막는다.
-  if (provider === 'apihub' && kind === 'shop') {
-    throw new OpenApiError(
-      'NAVER API HUB 는 쇼핑(상품) 검색을 제공하지 않습니다. 쇼핑 상품수·카테고리는 조회할 수 없습니다.',
-      501,
-    );
-  }
-
   const qs = new URLSearchParams({
     query,
     display: '1',
@@ -144,15 +129,21 @@ async function search<T>(
   const key = `open:${provider}:${kind}:${qs.toString()}`;
 
   return cached(key, TTL, async () => {
-    const res = await fetch(url, {
-      headers: headers(),
-      cache: 'no-store',
-    });
+    // 초당 호출 한도를 넘기면 429 가 떨어지는데, 그러면 그 키워드만 문서수가 빠져
+    // 표에 `–` 로 남는다. 게이트를 통과시키고 429·5xx 는 재시도한다.
+    const res = await withRetry(() =>
+      fetch(url, {
+        headers: headers(),
+        cache: 'no-store',
+      }),
+    );
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
+      const hint =
+        res.status === 429 ? ' 잠시 후 다시 시도해 주세요 (초당 호출 한도).' : '';
       throw new OpenApiError(
-        `네이버 검색 API 오류 (${kind}, ${res.status}): ${body.slice(0, 200)}`,
+        `네이버 검색 API 오류 (${kind}, ${res.status}): ${body.slice(0, 200)}${hint}`,
         res.status,
       );
     }
@@ -195,62 +186,14 @@ export async function fetchNewsItems(
   return { total: res.total ?? 0, items: res.items ?? [] };
 }
 
-/**
- * 쇼핑 검색 상위 상품에서 카테고리 분포를 추출한다.
- * 한 번의 호출로 상품 총수(total)와 대표 카테고리를 동시에 얻는다.
- */
-export async function fetchShopInsight(
-  keyword: string,
-  display = 100,
-): Promise<{ total: number; category: CategoryInfo | null }> {
-  const res = await search<ShopItem>('shop', keyword, { display, sort: 'sim' });
-
-  const items = res.items ?? [];
-  if (items.length === 0) return { total: res.total ?? 0, category: null };
-
-  const counter = new Map<string, number>();
-  for (const it of items) {
-    const path = [it.category1, it.category2, it.category3, it.category4]
-      .filter(Boolean)
-      .join(' > ');
-    if (!path) continue;
-    counter.set(path, (counter.get(path) ?? 0) + 1);
-  }
-
-  const ranked = [...counter.entries()].sort((a, b) => b[1] - a[1]);
-  if (ranked.length === 0) return { total: res.total ?? 0, category: null };
-
-  const [topPath, topCount] = ranked[0];
-  const prices = items
-    .map((it) => Number(it.lprice))
-    .filter((n) => Number.isFinite(n) && n > 0);
-
-  return {
-    total: res.total ?? 0,
-    category: {
-      path: topPath,
-      depth1: topPath.split(' > ')[0] ?? '',
-      confidence: topCount / items.length,
-      alternatives: ranked.slice(1, 4).map(([path, c]) => ({
-        path,
-        ratio: c / items.length,
-      })),
-      avgPrice: prices.length
-        ? Math.round(prices.reduce((a, b) => a + b, 0) / prices.length)
-        : 0,
-      minPrice: prices.length ? Math.min(...prices) : 0,
-    },
-  };
-}
-
 const stripTags = (s: string) => s.replace(/<[^>]*>/g, '').replace(/&[a-z]+;/g, ' ').trim();
 
 /**
- * 특정 키워드 검색 결과에서 내 블로그/스토어가 몇 번째에 있는지 찾는다.
+ * 특정 키워드 검색 결과에서 내 블로그·카페 글이 몇 번째에 있는지 찾는다.
  * ⚠️ 오픈 API 검색 결과 순서이며, 네이버 통합검색 실제 노출 순위와 다를 수 있다.
  */
 export async function findRank(
-  kind: 'blog' | 'shop' | 'cafearticle',
+  kind: 'blog' | 'cafearticle',
   keyword: string,
   target: string,
   maxScan = 300,
@@ -263,9 +206,9 @@ export async function findRank(
     const display = Math.min(100, maxScan - scanned);
     if (display <= 0) break;
 
-    let res: SearchResponse<BlogItem & ShopItem & CafeItem>;
+    let res: SearchResponse<BlogItem & CafeItem>;
     try {
-      res = await search<BlogItem & ShopItem & CafeItem>(kind, keyword, { display, start });
+      res = await search<BlogItem & CafeItem>(kind, keyword, { display, start });
     } catch (err) {
       // 첫 페이지부터 실패했다면 인증·쿼터 문제이므로 알려야 한다.
       // 2페이지 이후 실패는 이미 모은 결과로 답하고 멈춘다.
@@ -276,8 +219,7 @@ export async function findRank(
     const items = res.items ?? [];
     items.forEach((it, i) => {
       const rank = start + i;
-      const owner =
-        kind === 'shop' ? it.mallName ?? '' : kind === 'blog' ? it.bloggername ?? '' : it.cafename ?? '';
+      const owner = kind === 'blog' ? it.bloggername ?? '' : it.cafename ?? '';
       const haystack = `${it.link ?? ''} ${owner} ${it.bloggerlink ?? ''} ${it.cafeurl ?? ''}`
         .toLowerCase();
 
@@ -288,7 +230,6 @@ export async function findRank(
           link: it.link ?? '',
           owner,
           postdate: it.postdate,
-          price: it.lprice ? Number(it.lprice) : undefined,
         });
       }
     });
@@ -300,30 +241,35 @@ export async function findRank(
   return { scanned, hits };
 }
 
-/** 데이터랩 검색어 트렌드 (상대 지수 0~100) */
+/**
+ * 데이터랩 검색어 트렌드 (상대 지수 0~100).
+ *
+ * 마지막 칸은 대개 '진행 중인 달'이라 며칠치만 집계된 값이다. 버리지 않고
+ * `partial` 로 표시해 넘긴다 — 차트는 구분해서 그리고 시즌성은 이 칸을 뺀다.
+ */
 export async function fetchTrend(
   keyword: string,
   months = 12,
 ): Promise<TrendPoint[]> {
-  const end = new Date();
-  const start = new Date(end);
-  start.setMonth(start.getMonth() - months);
-
-  const fmt = (d: Date) => d.toISOString().slice(0, 10);
-  const key = `trend:${keyword}:${fmt(start)}:${fmt(end)}`;
+  const today = kstToday();
+  const startDate = formatYmd(monthsAgoStart(months, today));
+  const endDate = formatYmd(today);
+  const key = `trend:${keyword}:${startDate}:${endDate}`;
 
   return cached(key, TTL, async () => {
-    const res = await fetch(trendUrl(), {
-      method: 'POST',
-      headers: headers({ 'Content-Type': 'application/json' }),
-      body: JSON.stringify({
-        startDate: fmt(start),
-        endDate: fmt(end),
-        timeUnit: 'month',
-        keywordGroups: [{ groupName: keyword, keywords: [keyword] }],
+    const res = await withRetry(() =>
+      fetch(trendUrl(), {
+        method: 'POST',
+        headers: headers({ 'Content-Type': 'application/json' }),
+        body: JSON.stringify({
+          startDate,
+          endDate,
+          timeUnit: 'month',
+          keywordGroups: [{ groupName: keyword, keywords: [keyword] }],
+        }),
+        cache: 'no-store',
       }),
-      cache: 'no-store',
-    });
+    );
 
     if (!res.ok) {
       const body = await res.text().catch(() => '');
@@ -336,6 +282,10 @@ export async function fetchTrend(
     const json = (await res.json()) as {
       results?: { data?: { period: string; ratio: number }[] }[];
     };
-    return (json.results?.[0]?.data ?? []) as TrendPoint[];
+    return (json.results?.[0]?.data ?? []).map((d) => ({
+      period: d.period,
+      ratio: d.ratio,
+      partial: isPartialMonth(d.period),
+    }));
   });
 }

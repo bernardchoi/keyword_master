@@ -32,7 +32,14 @@ function buildHeaders(method: string, path: string): Record<string, string> {
   };
 }
 
-/** 검색수 필드는 값이 작으면 문자열 "< 10" 으로 내려온다. */
+/**
+ * 검색수 필드는 값이 작으면 문자열 `"< 10"` 으로 내려온다.
+ * 실측한 `여성여름원피스` 연관 키워드 592개 중 146개가 이 형태였다.
+ *
+ * 이때 돌려주는 10 은 실측치가 아니라 **상한**이다. PC·모바일이 모두 마스킹이면
+ * 합계 20 역시 상한이고 실제 검색수는 2 일 수도 있다. 그래서 값과 함께
+ * masked 를 올려 보내 경쟁강도를 하한(`≥`)으로 표시하게 한다.
+ */
 function parseCount(raw: unknown): { value: number; masked: boolean } {
   if (typeof raw === 'number') return { value: raw, masked: false };
   if (typeof raw === 'string') {

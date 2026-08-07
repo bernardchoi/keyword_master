@@ -1,12 +1,16 @@
-import type { CategoryInfo, Seasonality, TagCheckIssue, TagCheckResult } from './types';
+import type { Seasonality, TagCheckIssue, TagCheckResult } from './types';
 
 /**
  * ⚠️ 중요한 전제
  * 네이버는 "이 단어가 스마트스토어 태그로 등록 가능한지"를 알려 주는 공개 API 를
  * 제공하지 않는다. 여기서는 (1) 스마트스토어 상품등록 정책에 명시된 규칙을
- * 코드로 옮기고, (2) 쇼핑 검색 API 로 얻은 실제 상품수·카테고리 집중도를 근거로
- * 붙여 "등록 가능 / 주의 / 불가" 를 추정한다. 최종 판정은 스마트스토어
+ * 코드로 옮기고, (2) 검색광고 API 의 월간 검색수와 3년치 추이로 계산한 시즌성을
+ * 근거로 붙여 "등록 가능 / 주의 / 불가" 를 추정한다. 최종 판정은 스마트스토어
  * 상품등록 화면에서 확인해야 한다.
+ *
+ * 등록 상품수·카테고리 집중도를 근거로 쓰던 규칙(NO_PRODUCT / NICHE /
+ * AMBIGUOUS_CATEGORY)은 뺐다. 네이버가 쇼핑(상품) 검색 API 를 내려서
+ * 그 수치를 얻을 방법이 없어졌기 때문이다.
  */
 
 /** 홍보성·판매유도 문구는 태그로 쓸 수 없다 */
@@ -54,8 +58,6 @@ function includesAny(haystack: string, words: string[]): string | null {
 
 export interface TagCheckInput {
   tag: string;
-  shopTotal: number | null;
-  category: CategoryInfo | null;
   monthlySearches: number | null;
   /** 내가 실제로 취급하는 브랜드 — 오탐 방지용 화이트리스트 */
   ownBrands?: string[];
@@ -147,24 +149,7 @@ export function checkShoppingTag(input: TagCheckInput): TagCheckResult {
     push('warn', 'NUMERIC_ONLY', '숫자로만 이루어진 태그는 검색 매칭이 어렵습니다.', 25);
   }
 
-  // ── 3. 실제 쇼핑 데이터 기반 근거 ─────────────────────────────
-  if (input.shopTotal !== null) {
-    if (input.shopTotal === 0) {
-      push('warn', 'NO_PRODUCT', '이 키워드로 검색되는 상품이 없습니다. 태그로 등록해도 유입이 없습니다.', 30);
-    } else if (input.shopTotal < 50) {
-      push('info', 'NICHE', `등록 상품 ${input.shopTotal.toLocaleString('ko-KR')}개 — 경쟁이 적은 틈새 태그입니다.`, 0);
-    }
-  }
-
-  if (input.category && input.category.confidence < 0.4) {
-    push(
-      'warn',
-      'AMBIGUOUS_CATEGORY',
-      `카테고리가 분산되어 있습니다 (대표 카테고리 비중 ${Math.round(input.category.confidence * 100)}%). 내 상품 카테고리와 다르면 어뷰징으로 볼 수 있습니다.`,
-      20,
-    );
-  }
-
+  // ── 3. 검색 데이터 기반 근거 ──────────────────────────────────
   if (input.monthlySearches !== null && input.monthlySearches < 30) {
     push('info', 'LOW_VOLUME', '월간 검색수가 매우 낮아 태그 효과가 제한적입니다.', 10);
   }
@@ -190,8 +175,6 @@ export function checkShoppingTag(input: TagCheckInput): TagCheckResult {
     score,
     issues,
     evidence: {
-      shopTotal: input.shopTotal,
-      category: input.category,
       monthlySearches: input.monthlySearches,
     },
   };

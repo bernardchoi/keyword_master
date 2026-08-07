@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import type { TagCheckResult } from '@/lib/types';
-import { compact, won } from '@/lib/format';
+import { compact } from '@/lib/format';
 
 const VERDICT_CLASS: Record<TagCheckResult['verdict'], string> = {
   '등록 가능': 'ok',
@@ -17,7 +17,6 @@ export default function TagChecker({ initialTags = '' }: { initialTags?: string 
   const [error, setError] = useState<string | null>(null);
   const [results, setResults] = useState<TagCheckResult[] | null>(null);
   const [disclaimer, setDisclaimer] = useState<string | null>(null);
-  const [warning, setWarning] = useState<string | null>(null);
 
   const run = async () => {
     const list = tags.split(/[\n,]/).map((t) => t.trim()).filter(Boolean);
@@ -40,7 +39,6 @@ export default function TagChecker({ initialTags = '' }: { initialTags?: string 
       if (!res.ok) throw new Error(json.error ?? '검사에 실패했습니다.');
       setResults(json.results as TagCheckResult[]);
       setDisclaimer(json.disclaimer ?? null);
-      setWarning(json.warning ?? null);
     } catch (e) {
       setError(e instanceof Error ? e.message : '검사에 실패했습니다.');
     } finally {
@@ -55,7 +53,7 @@ export default function TagChecker({ initialTags = '' }: { initialTags?: string 
           <div>
             <h2 className="card-title">쇼핑 태그 등록 가능 여부 검사</h2>
             <p className="card-sub">
-              스마트스토어 상품등록 정책 + 실제 쇼핑 검색 데이터로 태그 적합성을 판정합니다 (최대 20개)
+              스마트스토어 상품등록 정책 + 월간 검색수 · 시즌성으로 태그 적합성을 판정합니다 (최대 20개)
             </p>
           </div>
         </div>
@@ -88,13 +86,6 @@ export default function TagChecker({ initialTags = '' }: { initialTags?: string 
 
       {error && <div className="notice err">{error}</div>}
 
-      {warning && (
-        <div className="notice">
-          <span>⚠️</span>
-          <span>{warning}</span>
-        </div>
-      )}
-
       {disclaimer && (
         <div className="notice info">
           <span>ℹ️</span>
@@ -120,15 +111,9 @@ export default function TagChecker({ initialTags = '' }: { initialTags?: string 
           ))}
 
           <div className="footnote">
-            쇼핑 상품수 {r.evidence.shopTotal === null ? '–' : compact(r.evidence.shopTotal)}
-            {r.evidence.monthlySearches !== null && ` · 월간 검색수 ${compact(r.evidence.monthlySearches)}`}
-            {r.evidence.category && (
-              <>
-                {' · '}대표 카테고리 <strong>{r.evidence.category.path}</strong>
-                {` (${Math.round(r.evidence.category.confidence * 100)}%)`}
-                {r.evidence.category.avgPrice > 0 && ` · 평균가 ${won(r.evidence.category.avgPrice)}`}
-              </>
-            )}
+            {r.evidence.monthlySearches === null
+              ? '월간 검색수 –'
+              : `월간 검색수 ${compact(r.evidence.monthlySearches)}`}
           </div>
         </div>
       ))}
