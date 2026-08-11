@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import KeywordTable from '@/components/KeywordTable';
 import SummaryCards from '@/components/SummaryCards';
 import CategoryExplorer from '@/components/CategoryExplorer';
+import ProductNameOptimizer from '@/components/ProductNameOptimizer';
 import TagChecker from '@/components/TagChecker';
 import RankChecker from '@/components/RankChecker';
 import InsightPanel from '@/components/InsightPanel';
@@ -12,10 +13,11 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
 import type { AnalyzeResponse, TrendPoint } from '@/lib/types';
 
-type Tab = 'keywords' | 'insight' | 'category' | 'tag' | 'rank' | 'favorites';
+type Tab = 'keywords' | 'productName' | 'insight' | 'category' | 'tag' | 'rank' | 'favorites';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'keywords', label: '키워드 분석' },
+  { id: 'productName', label: '상품명 최적화' },
   { id: 'insight', label: '구매층 · 시즌성' },
   { id: 'category', label: '카테고리별 연관' },
   { id: 'tag', label: '쇼핑 태그 검사' },
@@ -234,6 +236,10 @@ export default function Home() {
               <p>월간 검색수, 경쟁강도, 연관 키워드, 쇼핑 카테고리를 한 번에 확인할 수 있습니다.</p>
             </div>
           ))}
+
+        {/* ─── 상품명 최적화 ────────────────────────────── */}
+        {/* 계산이 순수 함수라 서버를 거치지 않는다 — 이미 받아 둔 rows 를 그대로 쓴다. */}
+        {tab === 'productName' && <ProductNameOptimizer data={data} />}
 
         {/* ─── 구매층 · 시즌성 ──────────────────────────── */}
         {tab === 'insight' && <InsightPanel keyword={data?.keyword ?? null} />}

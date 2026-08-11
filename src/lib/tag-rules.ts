@@ -13,23 +13,23 @@ import type { Seasonality, TagCheckIssue, TagCheckResult } from './types';
  * 그 수치를 얻을 방법이 없어졌기 때문이다.
  */
 
-/** 홍보성·판매유도 문구는 태그로 쓸 수 없다 */
-const PROMO_WORDS = [
+/** 홍보성·판매유도 문구는 태그·상품명 어느 쪽에도 쓸 수 없다 */
+export const PROMO_WORDS = [
   '최저가', '무료배송', '당일배송', '정품', '초특가', '특가', '할인', '세일',
   '이벤트', '사은품', '적립', '쿠폰', '베스트', '인기', '추천', '1위', '１위',
   '핫딜', '땡처리', '떨이', '재고정리', '품절임박', '한정판매', '단독',
   '공식', '공식판매처', '본사', '직영', '정식수입', '병행수입',
 ];
 
-/** 판매처/플랫폼명은 태그로 쓸 수 없다 */
-const CHANNEL_WORDS = [
+/** 판매처/플랫폼명은 태그·상품명 어느 쪽에도 쓸 수 없다 */
+export const CHANNEL_WORDS = [
   '스마트스토어', '스토어팜', '네이버', '쿠팡', '11번가', '지마켓', 'gmarket',
   '옥션', '위메프', '티몬', '인터파크', 'ssg', '쓱', '롯데온', '무신사',
   '알리', '알리익스프레스', '테무', '아마존', '이베이',
 ];
 
 /** 대표적인 타사 상표 (직접 취급 브랜드가 아니면 태그 사용 시 제재 대상) */
-const BRAND_WORDS = [
+export const BRAND_WORDS = [
   '나이키', 'nike', '아디다스', 'adidas', '샤넬', 'chanel', '구찌', 'gucci',
   '루이비통', 'louisvuitton', '애플', 'apple', '아이폰', 'iphone', '갤럭시',
   'galaxy', '삼성', '엘지', 'lg', '다이슨', 'dyson', '스타벅스', 'starbucks',
@@ -48,7 +48,7 @@ export function normalizeTag(raw: string): string {
   return raw.trim().replace(/\s+/g, ' ');
 }
 
-function includesAny(haystack: string, words: string[]): string | null {
+export function includesAny(haystack: string, words: string[]): string | null {
   const lower = haystack.toLowerCase().replace(/\s+/g, '');
   for (const w of words) {
     if (lower.includes(w.toLowerCase().replace(/\s+/g, ''))) return w;
