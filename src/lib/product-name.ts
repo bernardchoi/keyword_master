@@ -168,7 +168,16 @@ export function analyzeName(
       standalone: standalone.has(token),
     });
   }
-  suggestions.sort((a, b) => b.perChar - a.perChar || b.gain - a.gain);
+  // 확인이 필요한 후보(단독으로도 검색되는 말)는 값이 커도 아래로 내린다.
+  // `강아지사료` 에서 `동물병원` 이 글자당 이득 1위로 올라오는데, 품목 필터를
+  // 통과했을 뿐(`동물병원사료` 라는 키워드가 있다) 사료 상품명에 넣을 말이 아니다.
+  // 맨 위에 두면 그대로 따라 쓰게 되므로, 확실한 수식어부터 보여 준다.
+  suggestions.sort(
+    (a, b) =>
+      Number(a.standalone) - Number(b.standalone) ||
+      b.perChar - a.perChar ||
+      b.gain - a.gain,
+  );
 
   return {
     tokens,

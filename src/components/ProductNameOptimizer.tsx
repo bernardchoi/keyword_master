@@ -124,7 +124,8 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
                 <div>
                   <h2 className="card-title">추가할 단어</h2>
                   <p className="card-sub">
-                    글자당 이득이 큰 순서 · 같은 품목({result.head}) 수식어만 후보에 넣습니다
+                    같은 품목({result.head}) 수식어만 후보 · 글자당 이득 순 ·
+                    확인이 필요한 <span className="muted">⚠</span> 는 아래로 내립니다
                   </p>
                 </div>
               </div>
