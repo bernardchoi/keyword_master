@@ -69,7 +69,11 @@ export async function POST(req: Request) {
   const targets = sliced.slice(0, enrichLimit);
   const enrichErrors: string[] = [];
 
-  const enrichment = await mapLimit(targets, 5, async (m) => {
+  // 동시 실행 20개. 초당 호출 한도는 `lib/ratelimit.ts` 의 공용 게이트가 이미
+  // 잡고 있으므로(호출 시작 간격 40ms = 25 RPS) 여기서 또 조일 필요가 없다.
+  // 5로 두면 왕복 지연이 긴 환경에서 `100 ÷ 5 × 지연`이 그대로 대기 시간이 된다 —
+  // 실측: Vercel 배포본에서 100행 20.0초, 같은 코드가 로컬에서는 4.8초였다.
+  const enrichment = await mapLimit(targets, 20, async (m) => {
     if (demoMode || !canEnrich) return demoDocs(m.keyword, m.totalSearches) as DocCounts | null;
 
     try {
