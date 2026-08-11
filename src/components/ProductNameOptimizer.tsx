@@ -3,7 +3,12 @@
 import { useMemo, useState } from 'react';
 import type { AnalyzeResponse } from '@/lib/types';
 import { analyzeName, RECOMMENDED_LEN } from '@/lib/product-name';
+import { exportProductNameCsv } from '@/lib/export';
 import { compact, n } from '@/lib/format';
+
+/** 화면에 한 번에 보여 줄 개수. CSV 에는 전부 들어간다. */
+const SHOW_SUGGESTIONS = 12;
+const SHOW_MISSED = 12;
 
 /**
  * 계산이 전부 순수 함수라 서버를 거치지 않는다 —
@@ -45,6 +50,16 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
               &ldquo;{data.keyword}&rdquo; 연관 키워드 {data.rows.length}개 기준 · 입력하는 즉시 다시 계산합니다
             </p>
           </div>
+          <span className="spacer" />
+          {result && result.tokens.length > 0 && (
+            <button
+              type="button"
+              className="btn sm"
+              onClick={() => exportProductNameCsv(data.keyword, name, result)}
+            >
+              엑셀 내보내기
+            </button>
+          )}
         </div>
         <div className="card-pad">
           <div className="field" style={{ marginBottom: 12 }}>
@@ -126,6 +141,8 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
                   <p className="card-sub">
                     같은 품목({result.head}) 수식어만 후보 · 글자당 이득 순 ·
                     확인이 필요한 <span className="muted">⚠</span> 는 아래로 내립니다
+                    {result.suggestions.length > SHOW_SUGGESTIONS &&
+                      ` · ${result.suggestions.length}개 중 상위 ${SHOW_SUGGESTIONS}개 (전체는 엑셀로)`}
                   </p>
                 </div>
               </div>
@@ -140,7 +157,7 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
                     </tr>
                   </thead>
                   <tbody>
-                    {result.suggestions.map((s) => (
+                    {result.suggestions.slice(0, SHOW_SUGGESTIONS).map((s) => (
                       <tr key={s.token}>
                         <td className="left">
                           <button
@@ -208,11 +225,12 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
               {result.missed.length > 0 && (
                 <>
                   <p className="footnote" style={{ marginBottom: 6 }}>
-                    <strong>못 걸린 검색어 상위</strong> — 같은 품목이 아닌 것도 섞여 있습니다.
-                    내 상품과 무관하면 무시하세요.
+                    <strong>못 걸린 검색어 상위 {Math.min(result.missed.length, SHOW_MISSED)}개</strong>
+                    {result.missed.length > SHOW_MISSED && ` (전체 ${result.missed.length}개는 엑셀로)`}
+                    {' '}— 같은 품목이 아닌 것도 섞여 있습니다. 내 상품과 무관하면 무시하세요.
                   </p>
                   <div className="chiprow" style={{ marginTop: 0 }}>
-                    {result.missed.map((c) => (
+                    {result.missed.slice(0, SHOW_MISSED).map((c) => (
                       <span
                         className="chip"
                         style={{ cursor: 'default', opacity: 0.6 }}

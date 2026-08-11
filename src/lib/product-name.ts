@@ -102,9 +102,10 @@ export interface NameAnalysis {
   sameTypeCount: number;
   covered: CoveredKeyword[];
   coveredVolume: number;
-  /** 아직 못 걸린 키워드 중 검색량 상위 */
+  /** 아직 못 걸린 키워드 전체 (검색량 순). 화면에서는 잘라 쓰고 CSV 에는 전부 넣는다 */
   missed: CoveredKeyword[];
   missedVolume: number;
+  /** 추천 단어 전체 (정렬 완료). 화면에서는 잘라 쓴다 */
   suggestions: Suggestion[];
   issues: TagCheckIssue[];
 }
@@ -186,9 +187,9 @@ export function analyzeName(
     sameTypeCount: sameType.length,
     covered: covered.map(toCovered),
     coveredVolume,
-    missed: missed.slice(0, 12).map(toCovered),
+    missed: missed.map(toCovered),
     missedVolume: missed.reduce((s, r) => s + r.totalSearches, 0),
-    suggestions: suggestions.slice(0, 12),
+    suggestions,
     issues: checkName(name, tokens, head, ownBrands),
   };
 }
