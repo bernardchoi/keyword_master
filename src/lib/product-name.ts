@@ -15,7 +15,20 @@ import type { KeywordRow, TagCheckIssue } from './types';
  * 질의 토큰이 전부 들어 있으면 걸린다"는 동작 기반 추정 위에 있다.
  */
 
-/** 네이버 상품명 권장 길이. 넘으면 뒤쪽 단어의 가중치가 떨어진다. */
+/**
+ * 네이버가 권장하는 상품명 길이.
+ *
+ * 넘으면 랭킹 점수가 조금씩 깎이는 게 아니라 **어뷰징 판정 위험**에 들어간다.
+ * 상품등록 화면이 직접 경고한다 — "글자수 50자 이내 입력을 권장합니다",
+ * "가이드에 맞지 않을 경우 별도 고지 없이 제재될 수 있습니다".
+ * 쇼핑 검색 SEO 가이드도 "50자 내외 권장(최대 100자 허용)", "50자 이상은
+ * 어뷰즈로 판단될 확률이 높음" 으로 안내한다.
+ *
+ * 지키는 비용은 사실상 없다. 같은 품목의 쓸 만한 수식어는 50자보다 훨씬 먼저
+ * 고갈된다 — 커버 검색량이 6자 18,540 → 12자 120,260 → 21자 152,110 으로
+ * 20자 부근에서 이미 완만해진다. 그 뒤로 더 넣을 수 있는 건 대개 다른 품목이나
+ * 브랜드 단어이고, 그건 어차피 후보에서 걸러 낸다.
+ */
 export const RECOMMENDED_LEN = 50;
 /** 상품명 입력 한계 */
 export const MAX_LEN = 100;
@@ -99,6 +112,11 @@ export interface Suggestion {
   unlocks: string[];
   /** 단독으로도 검색되는 말 — 브랜드·고유명사일 수 있어 확인이 필요하다 */
   standalone: boolean;
+  /**
+   * 이 단어를 넣어도 권장 50자 안에 들어가는가.
+   * 실제 비용은 토큰 길이 + 앞 공백 1자다.
+   */
+  fitsBudget: boolean;
 }
 
 export interface CoveredKeyword {
@@ -111,6 +129,8 @@ export interface CoveredKeyword {
 export interface NameAnalysis {
   tokens: string[];
   length: number;
+  /** 권장 50자까지 남은 글자 수. 음수면 그만큼 초과 */
+  budgetLeft: number;
   /** 추정 상품유형. 못 찾으면 null */
   head: string | null;
   /** 연관 키워드 중 같은 품목인 개수 */
@@ -166,6 +186,7 @@ export function analyzeName(
   // head 자체가 상품명에 없으면 그것부터 넣어야 한다
   if (head && !tokens.includes(head)) candidates.add(head);
 
+  const length = name.trim().length;
   const suggestions: Suggestion[] = [];
   for (const token of candidates) {
     if (tokens.includes(token)) continue;
@@ -182,6 +203,9 @@ export function analyzeName(
       perChar: Math.round(gain / token.length),
       unlocks: unlocked.slice(0, 4).map((r) => r.keyword),
       standalone: standalone.has(token),
+      // 앞에 공백 하나가 더 붙는다. 상품명이 비어 있으면 공백 없이 들어간다.
+      fitsBudget:
+        length + token.length + (length > 0 ? 1 : 0) <= RECOMMENDED_LEN,
     });
   }
   // 확인이 필요한 후보(단독으로도 검색되는 말)는 값이 커도 아래로 내린다.
@@ -197,7 +221,8 @@ export function analyzeName(
 
   return {
     tokens,
-    length: name.trim().length,
+    length,
+    budgetLeft: RECOMMENDED_LEN - length,
     head,
     sameTypeCount: sameType.length,
     covered: covered.map(toCovered),
@@ -223,13 +248,22 @@ function checkName(
   const trimmed = name.trim();
   if (trimmed.length === 0) return issues;
 
+  // 두 검사는 독립이다. 예전에는 else-if 라서 100자를 넘기면 정작 중요한
+  // 50자 안내가 사라졌다.
   if (trimmed.length > MAX_LEN) {
-    push('block', 'TOO_LONG', `상품명은 최대 ${MAX_LEN}자입니다 (현재 ${trimmed.length}자).`);
-  } else if (trimmed.length > RECOMMENDED_LEN) {
+    push(
+      'block',
+      'TOO_LONG',
+      `상품명은 최대 ${MAX_LEN}자입니다 (현재 ${trimmed.length}자). 네이버 권장은 ${RECOMMENDED_LEN}자입니다.`,
+    );
+  }
+  if (trimmed.length > RECOMMENDED_LEN) {
     push(
       'warn',
       'OVER_RECOMMENDED',
-      `${RECOMMENDED_LEN}자를 넘으면 뒤쪽 단어의 가중치가 떨어집니다 (현재 ${trimmed.length}자).`,
+      `네이버 권장 ${RECOMMENDED_LEN}자를 넘었습니다 (현재 ${trimmed.length}자). ` +
+        '50자 초과는 어뷰징으로 판단될 수 있으며, 상품등록 화면도 "가이드에 맞지 않을 경우 ' +
+        '별도 고지 없이 제재될 수 있습니다" 라고 경고합니다.',
     );
   }
 

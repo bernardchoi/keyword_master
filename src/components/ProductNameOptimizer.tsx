@@ -131,8 +131,19 @@ export default function ProductNameOptimizer({
             <div className="stat">
               <div className="stat-label">상품명 길이</div>
               <div className="stat-value">{result.length}자</div>
+              {/* 네이버 권장 50자를 '남은 글자 예산'으로 보여 준다.
+                  고정된 "권장 50자" 문구보다 지금 몇 자를 더 쓸 수 있는지가 바로 쓰인다. */}
               <div className="stat-sub">
-                권장 {RECOMMENDED_LEN}자 · 토큰 {result.tokens.length}개
+                {result.budgetLeft >= 0 ? (
+                  <>
+                    {RECOMMENDED_LEN}자까지 {result.budgetLeft}자 남음
+                  </>
+                ) : (
+                  <strong style={{ color: 'var(--g-worst)' }}>
+                    권장 {RECOMMENDED_LEN}자를 {-result.budgetLeft}자 넘음
+                  </strong>
+                )}
+                {' · '}토큰 {result.tokens.length}개
               </div>
             </div>
             <div className="stat">
@@ -173,7 +184,9 @@ export default function ProductNameOptimizer({
                   </thead>
                   <tbody>
                     {result.suggestions.slice(0, SHOW_SUGGESTIONS).map((s) => (
-                      <tr key={s.token}>
+                      // 예산을 넘기는 후보는 흐리게. 막지는 않는다 —
+                      // 다른 단어를 빼고 넣는 선택은 사용자 몫이다.
+                      <tr key={s.token} style={s.fitsBudget ? undefined : { opacity: 0.55 }}>
                         <td className="left">
                           <button
                             type="button"
@@ -189,6 +202,15 @@ export default function ProductNameOptimizer({
                               title="단독으로도 검색되는 말입니다. 브랜드·고유명사라면 쓰지 마세요."
                             >
                               {' '}⚠
+                            </span>
+                          )}
+                          {!s.fitsBudget && (
+                            <span
+                              className="muted"
+                              style={{ fontSize: 11 }}
+                              title={`넣으면 권장 ${RECOMMENDED_LEN}자를 넘습니다. 다른 단어를 빼고 넣으세요.`}
+                            >
+                              {' '}· {RECOMMENDED_LEN}자 초과
                             </span>
                           )}
                         </td>
@@ -207,6 +229,11 @@ export default function ProductNameOptimizer({
                   <strong>⚠ 표시</strong>는 단독으로도 검색되는 말입니다. 브랜드·고유명사라면 상품명에
                   넣지 마세요 — 타사 상표는 제재 대상입니다. 알려진 상표는 미리 걸러 두었지만
                   <strong> 모든 브랜드를 자동으로 판별하지는 못하므로</strong> 낯선 단어는 직접 확인하세요.
+                  <br />
+                  <strong>{RECOMMENDED_LEN}자 초과 표시</strong>는 넣으면 네이버 권장 길이를 넘는
+                  단어입니다. 초과는 어뷰징으로 판단될 수 있으니 다른 단어를 빼고 넣으세요. 보통은
+                  그럴 일이 많지 않습니다 — 같은 품목의 쓸 만한 수식어는 {RECOMMENDED_LEN}자보다
+                  훨씬 먼저 고갈되고, 그 뒤로 남는 건 대개 다른 품목이나 브랜드 단어입니다.
                 </p>
               </div>
             </div>
