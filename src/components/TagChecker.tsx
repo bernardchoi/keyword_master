@@ -3,6 +3,7 @@
 import { useMemo, useState } from 'react';
 import type { AnalyzeResponse, TagCheckResult } from '@/lib/types';
 import { suggestTags, TAG_SLOTS } from '@/lib/tag-suggest';
+import { parseTags } from '@/lib/tag-rules';
 import { exportTagsCsv } from '@/lib/export';
 import { compact } from '@/lib/format';
 
@@ -41,10 +42,29 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
     [data, productName, ownBrands],
   );
 
-  const extraTags = useMemo(
-    () => extra.split(/[\n,]/).map((t) => t.trim()).filter(Boolean),
-    [extra],
-  );
+  const extraTags = useMemo(() => parseTags(extra), [extra]);
+
+  /**
+   * 스마트스토어에서 복사한 태그는 `# 태그 ×# 태그 ×` 한 덩어리로 붙는다.
+   * 붙여넣는 순간 한 줄에 하나로 펴 준다 — 세는 것만 맞춰 두면 화면과 값이 어긋나
+   * 사용자가 몇 개인지 확인할 수 없다.
+   */
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    const text = e.clipboardData.getData('text');
+    const parsed = parseTags(text);
+    // 원래 형태가 이미 한 줄에 하나면 굳이 손대지 않는다
+    if (parsed.length < 2) return;
+
+    e.preventDefault();
+    const el = e.currentTarget;
+    const before = extra.slice(0, el.selectionStart ?? extra.length);
+    const after = extra.slice(el.selectionEnd ?? extra.length);
+    const joined = parsed.join('\n');
+    const next = [before.replace(/\s+$/, ''), joined, after.replace(/^\s+/, '')]
+      .filter(Boolean)
+      .join('\n');
+    setExtra(next);
+  };
   const finalTags = useMemo(
     () => [...new Set([...selected, ...extraTags])],
     [selected, extraTags],
@@ -251,13 +271,17 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
           )}
 
           <div className="field" style={{ marginBottom: 12 }}>
-            <label htmlFor="tags">직접 입력 (한 줄에 하나 또는 쉼표로 구분)</label>
+            <label htmlFor="tags">
+              직접 입력 (한 줄에 하나 또는 쉼표로 구분) · 스마트스토어에서 복사한 태그를 그대로
+              붙여넣어도 됩니다
+            </label>
             <textarea
               id="tags"
               className="input"
               value={extra}
               onChange={(e) => setExtra(e.target.value)}
-              placeholder={'추천 목록에 없는 태그를 여기에 적으세요'}
+              onPaste={handlePaste}
+              placeholder={'추천 목록에 없는 태그를 여기에 적으세요\n스마트스토어 태그를 복사해 붙여넣으면 자동으로 한 줄에 하나씩 정리됩니다'}
             />
           </div>
           <div className="field" style={{ marginBottom: 14 }}>

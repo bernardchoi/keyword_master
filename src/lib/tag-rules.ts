@@ -43,7 +43,9 @@ export const CHANNEL_WORDS = [
 export const BRAND_WORDS = [
   // 글로벌
   '나이키', 'nike', '아디다스', 'adidas', '샤넬', 'chanel', '구찌', 'gucci',
-  '루이비통', 'louisvuitton', '애플', 'apple', '아이폰', 'iphone', '갤럭시',
+  // `애플` 단독은 `애플망고`(실제 품종)를 오탐해서 제품명으로 바꿨다.
+  '루이비통', 'louisvuitton', '애플워치', '애플펜슬', '아이패드', '맥북',
+  '아이폰', 'iphone', '갤럭시',
   'galaxy', '삼성', '엘지', 'lg', '다이슨', 'dyson', '스타벅스', 'starbucks',
   '레고', 'lego', '디즈니', 'disney', '뉴발란스', 'newbalance', '노스페이스',
   // 패션·SPA
@@ -52,6 +54,14 @@ export const BRAND_WORDS = [
   // 생활가전
   '차이슨', '샤오미', 'xiaomi', '위닉스', '발뮤다', 'balmuda', '쿠쿠', '쿠첸',
   '휴롬', '한일전기', '신일전자', '캐리어에어컨', '위니아',
+  // 음향·PC 주변기기 — 이 분야는 연관 키워드의 절반이 브랜드라 특히 촘촘히 넣는다
+  '소니', 'sony', '로지텍', 'logitech', 'jbl', '마샬', 'marshall',
+  '젠하이저', 'sennheiser', '커세어', 'corsair', '앱코', 'abko', '브리츠', 'britz',
+  '뱅앤올룹슨', '보스헤드셋', 'bose', '에어팟', 'airpods', '갤럭시버즈',
+  'qcy', '스틸시리즈', 'steelseries', 'hyperx', '크리에이티브', '오디오테크니카',
+  '비츠', 'beats', '녹스', '앤커', 'anker', '샤오미헤드셋',
+  // `레이저`(Razer)는 넣지 않는다 — `레이저프린터`·`레이저포인터` 를 오탐한다.
+  // 취급 브랜드라면 화면의 '내가 직접 취급하는 브랜드' 칸에 적으면 된다.
   // 식품·건강
   '정관장', '한삼인', '농심', '오뚜기', '풀무원', '동원참치', '비비고',
   // 반려동물
@@ -69,6 +79,26 @@ const MAX_LEN = 20;
 
 export function normalizeTag(raw: string): string {
   return raw.trim().replace(/\s+/g, ' ');
+}
+
+/**
+ * 태그 입력을 목록으로 쪼갠다.
+ *
+ * 스마트스토어 상품등록 화면의 태그를 그대로 복사하면
+ * `# 게이밍헤드셋 ×# 무선게이밍헤드셋 ×# 블루투스헤드셋 ×` 처럼 붙는다.
+ * `#` 는 태그 시작 표시고 `×` 는 삭제 버튼 글리프다. 줄바꿈·쉼표만 구분자로 보면
+ * 이 덩어리 전체가 태그 1개로 잡히므로 둘 다 구분자로 취급한다.
+ *
+ * 삭제 버튼이 ASCII `x` 로 복사되는 경우도 있어 **앞뒤가 공백으로 끊긴 x** 만 떼어 낸다
+ * (`xl사이즈` 같은 정상 태그를 건드리지 않기 위해).
+ */
+export function parseTags(raw: string): string[] {
+  return raw
+    .replace(/[#×✕✖⨯]/g, '\n')
+    .split(/[\n,]/)
+    // 룩비하인드는 구형 Safari 에서 파싱 자체가 깨지므로 쓰지 않는다
+    .map((t) => t.trim().replace(/^[xX](?=\s)/, '').replace(/\s[xX]$/, '').trim())
+    .filter((t) => t.length > 0 && t !== 'x' && t !== 'X');
 }
 
 export function includesAny(haystack: string, words: string[]): string | null {

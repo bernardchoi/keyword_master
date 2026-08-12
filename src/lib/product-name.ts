@@ -59,19 +59,34 @@ export function tokenize(name: string): string[] {
  * 검색량만 최대화하면 바로 그 둘을 추천하게 되는데, 네이버가 어뷰징으로 보는 항목이라
  * 따를수록 순위가 떨어진다.
  */
+/**
+ * 짧은 접미사는 긴 접미사를 항상 포함하므로(`드셋` ⊇ `헤드셋`) 개수만 보면
+ * 늘 짧은 쪽이 이긴다. 오타 키워드 하나로도 뒤집힌다 —
+ * 실측: `게이밍헤드셋` 에서 `무선해드셋`(해/헤 오타) 때문에
+ * `드셋` 36개 > `헤드셋` 35개가 되어 상품유형이 "드셋"으로 잡혔다.
+ *
+ * 그래서 최댓값에 가까우면(90% 이상) 그중 **가장 긴 것**을 고른다.
+ * 오타·동음이의어 몇 개는 흡수하면서, 실제로 다른 품목이라 개수가 확 벌어지는
+ * 경우(`선청소기` 11 vs `청소기` 52)는 그대로 걸러진다.
+ */
+const HEAD_COUNT_RATIO = 0.9;
+
 export function detectHead(seed: string, keywords: string[]): string | null {
   const s = seed.replace(/\s+/g, '');
-  let best: { suffix: string; count: number } | null = null;
+  const scored: { suffix: string; count: number }[] = [];
 
   for (let i = 0; i < s.length - 1; i++) {
     const suffix = s.slice(i);
     if (suffix.length < 2) continue;
-    const count = keywords.filter((k) => k.endsWith(suffix)).length;
-    if (!best || count > best.count || (count === best.count && suffix.length > best.suffix.length)) {
-      best = { suffix, count };
-    }
+    scored.push({ suffix, count: keywords.filter((k) => k.endsWith(suffix)).length });
   }
-  return best && best.count >= 2 ? best.suffix : null;
+
+  const max = Math.max(...scored.map((x) => x.count), 0);
+  if (max < 2) return null;
+
+  return scored
+    .filter((x) => x.count >= max * HEAD_COUNT_RATIO)
+    .sort((a, b) => b.suffix.length - a.suffix.length)[0].suffix;
 }
 
 export interface Suggestion {

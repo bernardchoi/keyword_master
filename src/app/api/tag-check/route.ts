@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { fetchTrend, hasOpenApiCreds } from '@/lib/openapi';
 import { computeSeasonality } from '@/lib/seasonality';
 import { fetchKeywordTool, hasSearchAdCreds } from '@/lib/searchad';
-import { checkShoppingTag } from '@/lib/tag-rules';
+import { checkShoppingTag, parseTags } from '@/lib/tag-rules';
 import { demoMetrics } from '@/lib/demo';
 import { mapLimit } from '@/lib/metrics';
 import type { Seasonality, TagCheckResult } from '@/lib/types';
@@ -20,9 +20,9 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 });
   }
 
-  const raw = Array.isArray(body.tags)
-    ? body.tags
-    : String(body.tags ?? '').split(/[\n,]/);
+  // 문자열로 오면 화면과 같은 파서를 쓴다 — 스마트스토어에서 복사한
+  // `# 태그 ×# 태그 ×` 덩어리가 태그 1개로 잡히지 않도록.
+  const raw = Array.isArray(body.tags) ? body.tags : parseTags(String(body.tags ?? ''));
 
   const tags = raw.map((t) => t.trim()).filter(Boolean).slice(0, MAX_TAGS);
   if (tags.length === 0) {
