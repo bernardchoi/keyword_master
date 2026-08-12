@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useMemo } from 'react';
 import type { AnalyzeResponse } from '@/lib/types';
 import { analyzeName, RECOMMENDED_LEN } from '@/lib/product-name';
 import { exportProductNameCsv } from '@/lib/export';
@@ -14,9 +14,24 @@ const SHOW_MISSED = 12;
  * 계산이 전부 순수 함수라 서버를 거치지 않는다 —
  * 이미 받아 둔 연관 키워드로 타이핑하는 즉시 다시 센다. API 쿼터도 쓰지 않는다.
  */
-export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse | null }) {
-  const [name, setName] = useState('');
-  const [brands, setBrands] = useState('');
+interface Props {
+  data: AnalyzeResponse | null;
+  /** 상품명·브랜드는 태그 추천도 함께 쓰므로 page 에서 들고 있는다 */
+  name: string;
+  onNameChange: (v: string) => void;
+  brands: string;
+  onBrandsChange: (v: string) => void;
+}
+
+export default function ProductNameOptimizer({
+  data,
+  name,
+  onNameChange,
+  brands,
+  onBrandsChange,
+}: Props) {
+  const setName = onNameChange;
+  const setBrands = onBrandsChange;
 
   const ownBrands = useMemo(
     () => brands.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
@@ -163,7 +178,7 @@ export default function ProductNameOptimizer({ data }: { data: AnalyzeResponse |
                           <button
                             type="button"
                             className="chip"
-                            onClick={() => setName((prev) => `${prev.trim()} ${s.token}`.trim())}
+                            onClick={() => setName(`${name.trim()} ${s.token}`.trim())}
                             title="상품명에 추가"
                           >
                             + {s.token}

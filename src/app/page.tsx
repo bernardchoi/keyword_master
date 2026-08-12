@@ -29,6 +29,10 @@ const EXAMPLES = ['여름원피스', '캠핑의자', '홍삼스틱', '무선청�
 
 export default function Home() {
   const [keyword, setKeyword] = useState('');
+  // 상품명은 두 탭이 함께 쓴다 — 태그 추천은 "상품명이 이미 걸어 둔 검색어"를 빼야 해서
+  // 상품명 최적화 탭의 입력을 그대로 받아야 한다.
+  const [productName, setProductName] = useState('');
+  const [ownBrands, setOwnBrands] = useState('');
   const [tab, setTab] = useState<Tab>('keywords');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -239,7 +243,15 @@ export default function Home() {
 
         {/* ─── 상품명 최적화 ────────────────────────────── */}
         {/* 계산이 순수 함수라 서버를 거치지 않는다 — 이미 받아 둔 rows 를 그대로 쓴다. */}
-        {tab === 'productName' && <ProductNameOptimizer data={data} />}
+        {tab === 'productName' && (
+          <ProductNameOptimizer
+            data={data}
+            name={productName}
+            onNameChange={setProductName}
+            brands={ownBrands}
+            onBrandsChange={setOwnBrands}
+          />
+        )}
 
         {/* ─── 구매층 · 시즌성 ──────────────────────────── */}
         {tab === 'insight' && <InsightPanel keyword={data?.keyword ?? null} />}
@@ -250,7 +262,14 @@ export default function Home() {
         {tab === 'category' && <CategoryExplorer rows={data?.rows ?? []} onPick={pick} />}
 
         {/* ─── 태그 검사 ────────────────────────────────── */}
-        {tab === 'tag' && <TagChecker initialTags={data?.keyword ?? ''} />}
+        {tab === 'tag' && (
+          <TagChecker
+            data={data}
+            productName={productName}
+            brands={ownBrands}
+            onBrandsChange={setOwnBrands}
+          />
+        )}
 
         {/* ─── 순위 조회 ────────────────────────────────── */}
         {tab === 'rank' && <RankChecker initialKeyword={data?.keyword ?? ''} />}

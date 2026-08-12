@@ -1,6 +1,7 @@
 import { localDateStamp } from './date';
 import type { NameAnalysis } from './product-name';
-import type { KeywordRow } from './types';
+import type { TagSuggestion } from './tag-suggest';
+import type { KeywordRow, TagCheckResult } from './types';
 
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM 을 붙여 CSV 를 만든다. */
 function toCsv(headers: string[], rows: (string | number)[][]): string {
@@ -126,4 +127,76 @@ export function exportProductNameCsv(seed: string, name: string, a: NameAnalysis
     `키워드마스터_상품명_${seed}_${localDateStamp()}.csv`,
     toCsv(PRODUCT_NAME_HEADERS, rows),
   );
+}
+
+/**
+ * 태그 추천 + 검사 결과.
+ *
+ * 상품명 CSV 와 같은 방식 — 맨 앞 `구분` 열로 섹션을 나눈다.
+ * `선택` 열이 Y 인 행이 실제로 상품에 넣을 태그다 (슬롯 10개).
+ */
+const TAG_HEADERS = [
+  '구분', '태그', '선택', '월간 검색수', '경쟁등급', '추천점수', '판정', '적합도', '설명',
+];
+
+export function exportTagsCsv(
+  seed: string,
+  productName: string,
+  suggestion: TagSuggestion,
+  selected: string[],
+  checked: TagCheckResult[],
+) {
+  const rows: (string | number)[][] = [];
+  const add = (
+    section: string,
+    tag: string,
+    pick: string | '' = '',
+    volume: number | '' = '',
+    grade = '',
+    score: number | '' = '',
+    verdict = '',
+    fit: number | '' = '',
+    note = '',
+  ) => rows.push([section, tag, pick, volume, grade, score, verdict, fit, note]);
+
+  const picked = new Set(selected);
+
+  add('요약', '분석 키워드', '', '', '', '', '', '', seed);
+  add('요약', '상품명', '', '', '', '', '', '', productName.trim() || '(입력 안 함)');
+  add('요약', '추정 상품유형', '', '', '', '', '', '', suggestion.head ?? '추정 실패');
+  add('요약', '선택한 태그 수', '', selected.length);
+  add('요약', '후보 수', '', suggestion.candidates.length);
+  add('요약', '제외 - 상품명이 이미 커버', '', suggestion.droppedInName);
+  add('요약', '제외 - 다른 품목', '', suggestion.droppedOffType);
+  add('요약', '제외 - 정책 위반', '', suggestion.droppedBlocked);
+
+  for (const c of suggestion.candidates) {
+    add(
+      '후보',
+      c.tag,
+      picked.has(c.tag) ? 'Y' : '',
+      c.totalSearches,
+      c.grade ?? '',
+      c.score,
+      '',
+      '',
+      c.uncertain ? '검색수가 마스킹돼 등급이 하한입니다' : '',
+    );
+  }
+
+  for (const r of checked) {
+    add(
+      '검사 결과',
+      r.normalized,
+      picked.has(r.tag) ? 'Y' : '',
+      r.evidence.monthlySearches ?? '',
+      '',
+      '',
+      r.verdict,
+      r.score,
+      r.issues.map((i) => `[${i.level}] ${i.message}`).join(' / '),
+    );
+  }
+
+  download(`키워드마스터_태그_${seed}_${localDateStamp()}.csv`, toCsv(TAG_HEADERS, rows));
 }
