@@ -98,6 +98,17 @@ npm run dev
 
 <http://localhost:3000> 접속.
 
+## 3-B. 테스트
+
+핵심 로직(상품명 커버리지·상품유형 추정, 태그 후보 추천·정책 검사, 경쟁강도,
+KST 날짜 계산, 시즌성)은 전부 순수 함수라 Vitest 로 검증합니다.
+
+```bash
+npm test           # 1회 실행
+npm run test:watch # 변경 감시
+npm run test:coverage
+```
+
 ## 4. 배포
 
 Vercel 에 올라가 있고, **`main` 에 푸시하면 자동 배포**됩니다 (GitHub 저장소가 프로젝트에 연결되어 있음). 수동 배포는 필요 없습니다.
