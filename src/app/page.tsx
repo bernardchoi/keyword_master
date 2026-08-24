@@ -9,8 +9,11 @@ import TagChecker from '@/components/TagChecker';
 import RankChecker from '@/components/RankChecker';
 import InsightPanel from '@/components/InsightPanel';
 import TrendChart from '@/components/TrendChart';
+import HistoryDiffBanner from '@/components/HistoryDiff';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLocalStorageText } from '@/hooks/useLocalStorageText';
+import { useAnalysisHistory } from '@/hooks/useAnalysisHistory';
+import { computeHistoryDiff, snapshotFromAnalysis, type HistoryDiffResult } from '@/lib/history';
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
 import type { AnalyzeResponse, TrendPoint } from '@/lib/types';
 
@@ -43,8 +46,11 @@ export default function Home() {
   const [data, setData] = useState<AnalyzeResponse | null>(null);
   const [trend, setTrend] = useState<TrendPoint[]>([]);
   const [status, setStatus] = useState<{ searchAd: boolean; openApi: boolean } | null>(null);
+  // 같은 키워드를 다시 분석했을 때 "지난번 대비" 배너를 띄우기 위한 이전 스냅샷
+  const [historyDiff, setHistoryDiff] = useState<HistoryDiffResult | null>(null);
 
   const favorites = useFavorites();
+  const history = useAnalysisHistory();
 
   useEffect(() => {
     fetch('/api/status')
@@ -71,7 +77,23 @@ export default function Home() {
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '분석에 실패했습니다.');
-      setData(json as AnalyzeResponse);
+      const result = json as AnalyzeResponse;
+      setData(result);
+
+      // 실제 데이터일 때만 이력을 남긴다 — 데모 데이터는 키워드마다 결정적이라
+      // 매번 "변화 없음"으로만 나와 진짜 추적처럼 보이면 오히려 오해를 산다.
+      if (!result.demo) {
+        const snapshot = snapshotFromAnalysis(result);
+        if (snapshot) {
+          const previous = history.getPrevious(kw);
+          setHistoryDiff(previous ? computeHistoryDiff(previous, snapshot) : null);
+          history.record(kw, snapshot);
+        } else {
+          setHistoryDiff(null);
+        }
+      } else {
+        setHistoryDiff(null);
+      }
 
       fetch(`/api/trend?keyword=${encodeURIComponent(kw)}&months=12`)
         .then((r) => r.json())
@@ -83,7 +105,7 @@ export default function Home() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [history]);
 
   const pick = useCallback(
     (k: string) => {
@@ -185,6 +207,7 @@ export default function Home() {
         {tab === 'keywords' &&
           (data ? (
             <>
+              {historyDiff && <HistoryDiffBanner diff={historyDiff} />}
               <SummaryCards data={data} />
 
               {trend.length > 1 && (
