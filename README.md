@@ -118,7 +118,7 @@ Vercel 에 올라가 있고, **`main` 에 푸시하면 자동 배포**됩니다 
 | 프로덕션 | <https://keyword-master-delta.vercel.app> |
 | 브랜치 별칭 | `keyword-master-git-main-*.vercel.app` (main), PR 은 프리뷰 URL 자동 생성 |
 | 함수 리전 | `icn1` (서울) — `vercel.json` 에 고정 |
-| 환경변수 | Vercel 프로젝트 설정에 5개 등록 (Production·Preview). `.env.local` 은 업로드되지 않음 |
+| 환경변수 | Vercel 프로젝트 설정에 5개 등록 (Production·Preview) + 선택 KV 2개. `.env.local` 은 업로드되지 않음 |
 
 ### 리전을 서울로 고정한 이유
 
@@ -167,7 +167,8 @@ src/
     product-name.ts      상품명 커버리지 계산 · 상품유형 추정 · 가드레일
     tag-suggest.ts       태그 후보 추천 (슬롯 10개 배분)
     demo.ts       키 없을 때 쓰는 결정적 더미 데이터
-    cache.ts      메모리 TTL 캐시
+    cache.ts      TTL 캐시 (메모리 L1 + 선택적 Redis L2)
+    kv.ts         Upstash/Vercel KV REST 클라이언트 (L2, 미설정 시 비활성)
     shopping-insight.ts  쇼핑인사이트 (분야 추정 · 성별 · 연령 · 쇼핑 추이)
     seasonality.ts       시즌성 · 뉴스 이슈도 계산
     export.ts     CSV 내보내기
@@ -375,6 +376,39 @@ CSV 로 내보낼 때는 숫자 칸에 `<`·`≥` 를 섞지 않고 `검색수 �
 | 120 | 83 성공 / 37 실패 `429 Rate Limited` |
 
 게이트를 넣은 뒤 키워드 분석(60회) + 카테고리 분류(33회) 를 동시에 돌려도 93회 전부 성공합니다 (4.7초).
+
+## 서버리스와 캐시
+
+`cache.ts` 는 두 단으로 쌓여 있습니다.
+
+- **L1 — 프로세스 메모리**: 항상 켜져 있고 왕복이 없어 빠릅니다. 하지만 Vercel
+  서버리스 함수는 요청마다 다른 인스턴스가 뜰 수 있어서, 인스턴스 사이에는
+  이 메모리가 공유되지 않습니다. 콜드스타트가 나면 "6시간 캐시"였던 것이
+  실제로는 그때그때 미스가 나는 구조였습니다.
+- **L2 — Redis (선택)**: `KV_REST_API_URL`/`KV_REST_API_TOKEN`(Vercel KV) 또는
+  `UPSTASH_REDIS_REST_URL`/`UPSTASH_REDIS_REST_TOKEN`(Upstash 직접 연결) 이
+  설정되면 자동으로 켜집니다. 인스턴스가 바뀌어도 이 저장소는 공유되므로
+  캐시가 실제로 6시간을 버팁니다. 두 변수 다 없으면 `kv.ts` 는 조용히
+  비활성 상태로 남고 앱은 L1 만으로 지금까지처럼 동작합니다 — **로컬
+  개발에는 Redis 가 필요 없습니다.**
+
+Redis 호출이 실패하거나(네트워크 문제, 토큰 만료) 타임아웃(2초)에 걸려도
+요청은 죽지 않습니다. 읽기 실패는 직접 계산으로, 쓰기 실패는 "이번 응답은
+정상, 다음 요청부터 다시 캐시 미스"로 조용히 물러납니다.
+
+붙이는 방법 — Vercel 대시보드에서 **Storage → Create Database →
+Marketplace Database Provider → Upstash for Redis**(무료 티어 있음)를 만들면
+`KV_REST_API_URL`/`KV_REST_API_TOKEN` 이 프로젝트 환경변수에 자동으로
+채워집니다. 새 패키지는 추가하지 않았습니다 — Upstash REST API 는 순수
+HTTP 라 Next.js 런타임의 전역 `fetch` 로 충분합니다.
+
+> ⚠️ 레이트리밋(`ratelimit.ts`)은 같은 이유로 인스턴스 사이에 공유되지
+> 않지만 그대로 뒀습니다. 이 게이트는 **한 요청 안에서 부채꼴로 퍼지는
+> 내부 호출**(예: `/api/analyze` 하나가 문서수 조회 100회로 퍼지는 것)을
+> 25 RPS 로 눌러 주는 용도라 인스턴스 하나 안에서는 지금도 제대로 동작하고,
+> 여러 인스턴스가 겹쳐 429 가 나더라도 `withRetry` 가 두 번까지 재시도합니다.
+> 여러 사용자가 동시에 몰리는 서비스가 아니라면 Redis 기반 분산 리미터로
+> 바꾸는 비용 대비 실익이 낮아 보류했습니다.
 
 ## 문제 해결
 
