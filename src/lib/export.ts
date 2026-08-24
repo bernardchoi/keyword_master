@@ -1,4 +1,5 @@
 import { localDateStamp } from './date';
+import type { BatchRowResult } from './batch';
 import type { NameAnalysis } from './product-name';
 import type { TagSuggestion } from './tag-suggest';
 import type { KeywordRow, TagCheckResult } from './types';
@@ -199,4 +200,45 @@ export function exportTagsCsv(
   }
 
   download(`키워드마스터_태그_${seed}_${localDateStamp()}.csv`, toCsv(TAG_HEADERS, rows));
+}
+
+/**
+ * 다중 상품 일괄 처리 결과.
+ *
+ * 상품명 CSV·태그 CSV 와 달리 여기는 상품 하나가 표의 한 행이다(섹션 구분이
+ * 필요 없다) — 여러 상품을 나란히 비교하려고 돌리는 기능이라 한 상품의
+ * 세부 내역보다 상품 간 비교가 우선이다. 추천 단어·추천 태그는 상위
+ * 5개만 한 칸에 이어 적는다.
+ */
+const BATCH_HEADERS = [
+  '줄', '키워드', '상품명', '상태', '오류', '글자수', '추정 상품유형',
+  '커버 검색량', '걸리는 검색어 수', '검사 - 불가', '검사 - 주의',
+  '추천 단어(상위 5)', '추천 태그(상위 5)',
+];
+
+export function exportBatchCsv(results: BatchRowResult[]) {
+  const toRow = (r: BatchRowResult): (string | number)[] => {
+    if (r.status === 'error' || !r.analysis || !r.tags) {
+      return [r.line, r.keyword, r.name, '실패', r.error ?? '', '', '', '', '', '', '', '', ''];
+    }
+    const block = r.analysis.issues.filter((i) => i.level === 'block').length;
+    const warn = r.analysis.issues.filter((i) => i.level === 'warn').length;
+    return [
+      r.line,
+      r.keyword,
+      r.name,
+      '성공',
+      '',
+      r.analysis.length,
+      r.analysis.head ?? '',
+      r.analysis.coveredVolume,
+      r.analysis.covered.length,
+      block,
+      warn,
+      r.analysis.suggestions.slice(0, 5).map((s) => s.token).join(', '),
+      r.tags.candidates.slice(0, 5).map((c) => c.tag).join(', '),
+    ];
+  };
+
+  download(`키워드마스터_일괄처리_${localDateStamp()}.csv`, toCsv(BATCH_HEADERS, results.map(toRow)));
 }

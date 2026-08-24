@@ -10,6 +10,7 @@ import RankChecker from '@/components/RankChecker';
 import InsightPanel from '@/components/InsightPanel';
 import TrendChart from '@/components/TrendChart';
 import HistoryDiffBanner from '@/components/HistoryDiff';
+import BatchOptimizer from '@/components/BatchOptimizer';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLocalStorageText } from '@/hooks/useLocalStorageText';
 import { useAnalysisHistory } from '@/hooks/useAnalysisHistory';
@@ -17,7 +18,15 @@ import { computeHistoryDiff, snapshotFromAnalysis, type HistoryDiffResult } from
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
 import type { AnalyzeResponse, TrendPoint } from '@/lib/types';
 
-type Tab = 'keywords' | 'productName' | 'insight' | 'category' | 'tag' | 'rank' | 'favorites';
+type Tab =
+  | 'keywords'
+  | 'productName'
+  | 'insight'
+  | 'category'
+  | 'tag'
+  | 'rank'
+  | 'batch'
+  | 'favorites';
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'keywords', label: '키워드 분석' },
@@ -26,6 +35,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'category', label: '카테고리별 연관' },
   { id: 'tag', label: '쇼핑 태그 검사' },
   { id: 'rank', label: '순위 조회' },
+  { id: 'batch', label: '일괄 처리' },
   { id: 'favorites', label: '즐겨찾기' },
 ];
 
@@ -304,6 +314,12 @@ export default function Home() {
 
         {/* ─── 순위 조회 ────────────────────────────────── */}
         {tab === 'rank' && <RankChecker initialKeyword={data?.keyword ?? ''} />}
+
+        {/* ─── 일괄 처리 ────────────────────────────────── */}
+        {/* 상품마다 시드 키워드가 다를 수 있어 data 에 의존하지 않는다 — 자체적으로 /api/analyze 를 돈다. */}
+        {tab === 'batch' && (
+          <BatchOptimizer brands={ownBrands} blockedBrandsText={blockedBrandsText} />
+        )}
 
         {/* ─── 즐겨찾기 ─────────────────────────────────── */}
         {tab === 'favorites' && (
