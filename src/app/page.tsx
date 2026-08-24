@@ -10,6 +10,7 @@ import RankChecker from '@/components/RankChecker';
 import InsightPanel from '@/components/InsightPanel';
 import TrendChart from '@/components/TrendChart';
 import { useFavorites } from '@/hooks/useFavorites';
+import { useLocalStorageText } from '@/hooks/useLocalStorageText';
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
 import type { AnalyzeResponse, TrendPoint } from '@/lib/types';
 
@@ -33,6 +34,9 @@ export default function Home() {
   // 상품명 최적화 탭의 입력을 그대로 받아야 한다.
   const [productName, setProductName] = useState('');
   const [ownBrands, setOwnBrands] = useState('');
+  // 코드의 브랜드 목록(brand-data.ts)에 없는 타사 브랜드를 사용자가 직접 보태는 목록.
+  // 세션이 끝나도 남아 있어야 매번 다시 입력하지 않는다 — localStorage 에 저장한다.
+  const [blockedBrandsText, setBlockedBrandsText] = useLocalStorageText('km:blockedBrands:v1');
   const [tab, setTab] = useState<Tab>('keywords');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -250,6 +254,8 @@ export default function Home() {
             onNameChange={setProductName}
             brands={ownBrands}
             onBrandsChange={setOwnBrands}
+            blockedBrandsText={blockedBrandsText}
+            onBlockedBrandsChange={setBlockedBrandsText}
           />
         )}
 
@@ -268,6 +274,8 @@ export default function Home() {
             productName={productName}
             brands={ownBrands}
             onBrandsChange={setOwnBrands}
+            blockedBrandsText={blockedBrandsText}
+            onBlockedBrandsChange={setBlockedBrandsText}
           />
         )}
 

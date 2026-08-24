@@ -1,3 +1,4 @@
+import { BRAND_WORDS, CHANNEL_WORDS, PROMO_WORDS, SEASONAL_WORDS, withCustomBrandWords } from './brand-data';
 import type { Seasonality, TagCheckIssue, TagCheckResult } from './types';
 
 /**
@@ -11,72 +12,12 @@ import type { Seasonality, TagCheckIssue, TagCheckResult } from './types';
  * 등록 상품수·카테고리 집중도를 근거로 쓰던 규칙(NO_PRODUCT / NICHE /
  * AMBIGUOUS_CATEGORY)은 뺐다. 네이버가 쇼핑(상품) 검색 API 를 내려서
  * 그 수치를 얻을 방법이 없어졌기 때문이다.
- */
-
-/** 홍보성·판매유도 문구는 태그·상품명 어느 쪽에도 쓸 수 없다 */
-export const PROMO_WORDS = [
-  '최저가', '무료배송', '당일배송', '정품', '초특가', '특가', '할인', '세일',
-  '이벤트', '사은품', '적립', '쿠폰', '베스트', '인기', '추천', '1위', '１위',
-  '핫딜', '땡처리', '떨이', '재고정리', '품절임박', '한정판매', '단독',
-  '공식', '공식판매처', '본사', '직영', '정식수입', '병행수입',
-];
-
-/** 판매처/플랫폼명은 태그·상품명 어느 쪽에도 쓸 수 없다 */
-export const CHANNEL_WORDS = [
-  '스마트스토어', '스토어팜', '네이버', '쿠팡', '11번가', '지마켓', 'gmarket',
-  '옥션', '위메프', '티몬', '인터파크', 'ssg', '쓱', '롯데온', '무신사',
-  '알리', '알리익스프레스', '테무', '아마존', '이베이',
-];
-
-/**
- * 대표적인 타사 상표 (직접 취급 브랜드가 아니면 태그·상품명 사용 시 제재 대상).
  *
- * ⚠️ 이 목록은 완전할 수 없다. 실제 연관 키워드에는 `한끼뚝딱사료`, `라비앙독사료`
- * 처럼 알려지지 않은 브랜드가 계속 올라온다. 키워드 데이터만으로 브랜드를 판별하는
- * 방법도 시도해 봤지만(수식어가 단독으로도 검색되는지) `유니클로`·`나우`·`샤크`·`신일`
- * 은 못 잡고 `애견`·`물걸레`·`노령견` 같은 정상 수식어만 걸려서 쓰지 않는다.
- * **후보에 남은 브랜드는 사람이 걸러야 한다.** 화면에도 그렇게 적어 두었다.
- *
- * 여기 담는 건 substring 매칭이라 짧고 흔한 말은 넣지 않는다 —
- * 예를 들어 `나우`(2자)를 넣으면 `하나우산` 같은 무관한 말까지 걸린다.
+ * 정책 단어 목록(홍보문구·판매처명·타사 브랜드)은 `brand-data.ts` 에 있다.
+ * **후보에 남은 브랜드는 사람이 걸러야 한다** — 목록은 완전할 수 없고, 화면의
+ * "직접 확인한 타사 브랜드 추가" 칸으로 그때그때 보탤 수 있다.
  */
-export const BRAND_WORDS = [
-  // 글로벌
-  '나이키', 'nike', '아디다스', 'adidas', '샤넬', 'chanel', '구찌', 'gucci',
-  // `애플` 은 `애플망고`(실제 품종)를 오탐한다. 그래도 남겨 둔다 —
-  // 빼면 `애플헤드셋` 이 추천 2위로 올라온다. 브랜드를 놓쳐 제재를 받는 쪽이
-  // 정상 태그가 한 번 막히는 것보다 비싸다. 막힌 쪽은 화면에서 이유를 보고
-  // 직접 입력으로 넘기면 된다.
-  '루이비통', 'louisvuitton', '애플', 'apple', '애플워치', '애플펜슬',
-  '아이패드', '맥북', '아이폰', 'iphone', '갤럭시',
-  'galaxy', '삼성', '엘지', 'lg', '다이슨', 'dyson', '스타벅스', 'starbucks',
-  '레고', 'lego', '디즈니', 'disney', '뉴발란스', 'newbalance', '노스페이스',
-  // 패션·SPA
-  '유니클로', 'uniqlo', '지오다노', '스파오', '에잇세컨즈', '미쏘',
-  '에이치앤엠', '탑텐', '무신사스탠다드', '로엠', '나노세컨', '아이팜므', '디얼마미',
-  // 생활가전
-  '차이슨', '샤오미', 'xiaomi', '위닉스', '발뮤다', 'balmuda', '쿠쿠', '쿠첸',
-  '휴롬', '한일전기', '신일전자', '캐리어에어컨', '위니아',
-  // 음향·PC 주변기기 — 이 분야는 연관 키워드의 절반이 브랜드라 특히 촘촘히 넣는다
-  '소니', 'sony', '로지텍', 'logitech', 'jbl', '마샬', 'marshall',
-  '젠하이저', 'sennheiser', '커세어', 'corsair', '앱코', 'abko', '브리츠', 'britz',
-  '뱅앤올룹슨', '보스헤드셋', 'bose', '에어팟', 'airpods', '갤럭시버즈',
-  'qcy', '스틸시리즈', 'steelseries', 'hyperx', '크리에이티브', '오디오테크니카',
-  '비츠', 'beats', '녹스', '앤커', 'anker', '샤오미헤드셋',
-  // `레이저`(Razer)는 넣지 않는다 — `레이저프린터`·`레이저포인터` 를 오탐한다.
-  // 취급 브랜드라면 화면의 '내가 직접 취급하는 브랜드' 칸에 적으면 된다.
-  // 식품·건강
-  '정관장', '한삼인', '농심', '오뚜기', '풀무원', '동원참치', '비비고',
-  // 반려동물
-  // `시저`(반려동물 사료)는 `시저샐러드` 를 오탐해서 뺐다.
-  '로얄캐닌', 'royalcanin', '오리젠', '아카나', '퓨리나', '내추럴발란스',
-];
-
-/** 시즌·이벤트성 키워드는 시기와 맞지 않으면 어뷰징으로 판단될 수 있다 */
-const SEASONAL_WORDS = [
-  '크리스마스', '설날', '추석', '발렌타인', '화이트데이', '빼빼로데이',
-  '블랙프라이데이', '수능', '어버이날', '스승의날', '어린이날', '핼러윈', '할로윈',
-];
+export { BRAND_WORDS, CHANNEL_WORDS, PROMO_WORDS };
 
 const MAX_LEN = 20;
 
@@ -117,6 +58,11 @@ export interface TagCheckInput {
   monthlySearches: number | null;
   /** 내가 실제로 취급하는 브랜드 — 오탐 방지용 화이트리스트 */
   ownBrands?: string[];
+  /**
+   * 코드의 `BRAND_WORDS` 에 없는 타사 브랜드를 사용자가 직접 보탠 목록.
+   * `brand-data.ts` 의 목록과 합쳐서 검사한다.
+   */
+  blockedBrands?: string[];
   /** 실제 3년치 추이로 계산한 시즌성. 단어 목록보다 우선한다. */
   seasonality?: Seasonality | null;
 }
@@ -164,7 +110,7 @@ export function checkShoppingTag(input: TagCheckInput): TagCheckResult {
   if (channel) push('block', 'CHANNEL', `판매처·플랫폼명은 사용할 수 없습니다: "${channel}"`, 60);
 
   const own = (input.ownBrands ?? []).map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(normalized, BRAND_WORDS);
+  const brand = includesAny(normalized, withCustomBrandWords(input.blockedBrands ?? []));
   if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) {
     push(
       'block',

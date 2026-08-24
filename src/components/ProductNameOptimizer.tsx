@@ -21,6 +21,9 @@ interface Props {
   onNameChange: (v: string) => void;
   brands: string;
   onBrandsChange: (v: string) => void;
+  /** 코드의 브랜드 목록에 없는 타사 브랜드를 사용자가 직접 보태는 목록 (localStorage 저장) */
+  blockedBrandsText: string;
+  onBlockedBrandsChange: (v: string) => void;
 }
 
 export default function ProductNameOptimizer({
@@ -29,6 +32,8 @@ export default function ProductNameOptimizer({
   onNameChange,
   brands,
   onBrandsChange,
+  blockedBrandsText,
+  onBlockedBrandsChange,
 }: Props) {
   const setName = onNameChange;
   const setBrands = onBrandsChange;
@@ -37,10 +42,14 @@ export default function ProductNameOptimizer({
     () => brands.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
     [brands],
   );
+  const blockedBrands = useMemo(
+    () => blockedBrandsText.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
+    [blockedBrandsText],
+  );
 
   const result = useMemo(
-    () => (data ? analyzeName(name, data.rows, data.keyword, ownBrands) : null),
-    [data, name, ownBrands],
+    () => (data ? analyzeName(name, data.rows, data.keyword, ownBrands, blockedBrands) : null),
+    [data, name, ownBrands, blockedBrands],
   );
 
   if (!data) {
@@ -95,6 +104,18 @@ export default function ProductNameOptimizer({
               value={brands}
               onChange={(e) => setBrands(e.target.value)}
               placeholder="예: 나이키, 아디다스"
+            />
+          </div>
+          <div className="field" style={{ marginTop: 12 }}>
+            <label htmlFor="pn-blocked-brands">
+              직접 확인한 타사 브랜드 추가 (선택 — 목록에 없는 브랜드를 차단)
+            </label>
+            <input
+              id="pn-blocked-brands"
+              className="input"
+              value={blockedBrandsText}
+              onChange={(e) => onBlockedBrandsChange(e.target.value)}
+              placeholder="예: 나우, 샤크, 신일 — 브라우저에 저장되어 다음에도 남습니다"
             />
           </div>
         </div>

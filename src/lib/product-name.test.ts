@@ -128,6 +128,15 @@ describe('analyzeName', () => {
     expect(result.suggestions.map((s) => s.token)).toContain('나이키');
   });
 
+  it('blockedBrands 로 보탠 단어는 코드의 BRAND_WORDS 에 없어도 후보에서 빠진다', () => {
+    const rowsWithUnknownBrand = [...rows, row('무명브랜드원피스', 900)];
+    const withoutBlock = analyzeName('린넨 원피스', rowsWithUnknownBrand, seed);
+    expect(withoutBlock.suggestions.map((s) => s.token)).toContain('무명브랜드');
+
+    const withBlock = analyzeName('린넨 원피스', rowsWithUnknownBrand, seed, [], ['무명브랜드']);
+    expect(withBlock.suggestions.map((s) => s.token)).not.toContain('무명브랜드');
+  });
+
   describe('checkName 이슈 검사', () => {
     it('빈 상품명은 이슈 없음', () => {
       expect(analyzeName('', rows, seed).issues).toEqual([]);

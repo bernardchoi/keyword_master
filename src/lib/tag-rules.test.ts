@@ -76,6 +76,19 @@ describe('checkShoppingTag', () => {
     expect(owned.issues.some((i) => i.code === 'BRAND')).toBe(false);
   });
 
+  it('blockedBrands 로 보탠 단어는 코드의 BRAND_WORDS 에 없어도 등록 불가', () => {
+    const withoutBlock = checkShoppingTag({ tag: '무명브랜드원피스', monthlySearches: 500 });
+    expect(withoutBlock.issues.some((i) => i.code === 'BRAND')).toBe(false);
+
+    const withBlock = checkShoppingTag({
+      tag: '무명브랜드원피스',
+      monthlySearches: 500,
+      blockedBrands: ['무명브랜드'],
+    });
+    expect(withBlock.issues.some((i) => i.code === 'BRAND')).toBe(true);
+    expect(withBlock.verdict).toBe('등록 불가');
+  });
+
   it('숫자로만 이루어진 태그는 경고', () => {
     const result = checkShoppingTag({ tag: '12345', monthlySearches: 500 });
     expect(result.issues.some((i) => i.code === 'NUMERIC_ONLY')).toBe(true);

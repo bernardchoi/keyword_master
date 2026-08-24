@@ -1,4 +1,5 @@
-import { BRAND_WORDS, CHANNEL_WORDS, includesAny, PROMO_WORDS } from './tag-rules';
+import { withCustomBrandWords } from './brand-data';
+import { CHANNEL_WORDS, includesAny, PROMO_WORDS } from './tag-rules';
 import { covers, detectHead, tokenize } from './product-name';
 import type { Grade, KeywordRow } from './types';
 
@@ -63,9 +64,9 @@ export interface TagSuggestion {
   droppedBlocked: number;
 }
 
-function blocked(tag: string, ownBrands: string[]): boolean {
+function blocked(tag: string, ownBrands: string[], blockedBrands: string[]): boolean {
   const own = ownBrands.map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(tag, BRAND_WORDS);
+  const brand = includesAny(tag, withCustomBrandWords(blockedBrands));
   if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) return true;
   return Boolean(includesAny(tag, PROMO_WORDS) ?? includesAny(tag, CHANNEL_WORDS));
 }
@@ -75,6 +76,8 @@ export function suggestTags(
   seed: string,
   productName: string,
   ownBrands: string[] = [],
+  /** 코드의 브랜드 목록에 없는 타사 브랜드를 사용자가 직접 보탠 목록 */
+  blockedBrands: string[] = [],
 ): TagSuggestion {
   const head = detectHead(seed, rows.map((r) => r.keyword));
   const nameTokens = tokenize(productName);
@@ -95,7 +98,7 @@ export function suggestTags(
       continue;
     }
     if (r.keyword.length > TAG_MAX_LEN) continue;
-    if (blocked(r.keyword, ownBrands)) {
+    if (blocked(r.keyword, ownBrands, blockedBrands)) {
       droppedBlocked++;
       continue;
     }

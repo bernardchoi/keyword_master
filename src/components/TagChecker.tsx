@@ -22,9 +22,19 @@ interface Props {
   productName: string;
   brands: string;
   onBrandsChange: (v: string) => void;
+  /** 코드의 브랜드 목록에 없는 타사 브랜드를 사용자가 직접 보태는 목록 (localStorage 저장) */
+  blockedBrandsText: string;
+  onBlockedBrandsChange: (v: string) => void;
 }
 
-export default function TagChecker({ data, productName, brands, onBrandsChange }: Props) {
+export default function TagChecker({
+  data,
+  productName,
+  brands,
+  onBrandsChange,
+  blockedBrandsText,
+  onBlockedBrandsChange,
+}: Props) {
   const [selected, setSelected] = useState<string[]>([]);
   const [extra, setExtra] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,10 +46,15 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
     () => brands.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
     [brands],
   );
+  const blockedBrands = useMemo(
+    () => blockedBrandsText.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
+    [blockedBrandsText],
+  );
 
   const suggestion = useMemo(
-    () => (data ? suggestTags(data.rows, data.keyword, productName, ownBrands) : null),
-    [data, productName, ownBrands],
+    () =>
+      data ? suggestTags(data.rows, data.keyword, productName, ownBrands, blockedBrands) : null,
+    [data, productName, ownBrands, blockedBrands],
   );
 
   const extraTags = useMemo(() => parseTags(extra), [extra]);
@@ -90,7 +105,7 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
       const res = await fetch('/api/tag-check', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ tags: finalTags, ownBrands }),
+        body: JSON.stringify({ tags: finalTags, ownBrands, blockedBrands }),
       });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? '검사에 실패했습니다.');
@@ -284,7 +299,7 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
               placeholder={'추천 목록에 없는 태그를 여기에 적으세요\n스마트스토어 태그를 복사해 붙여넣으면 자동으로 한 줄에 하나씩 정리됩니다'}
             />
           </div>
-          <div className="field" style={{ marginBottom: 14 }}>
+          <div className="field" style={{ marginBottom: 12 }}>
             <label htmlFor="brands">내가 직접 취급하는 브랜드 (선택 — 상표 오탐 방지)</label>
             <input
               id="brands"
@@ -292,6 +307,18 @@ export default function TagChecker({ data, productName, brands, onBrandsChange }
               value={brands}
               onChange={(e) => onBrandsChange(e.target.value)}
               placeholder="예: 나이키, 아디다스"
+            />
+          </div>
+          <div className="field" style={{ marginBottom: 14 }}>
+            <label htmlFor="blocked-brands">
+              직접 확인한 타사 브랜드 추가 (선택 — 목록에 없는 브랜드를 차단)
+            </label>
+            <input
+              id="blocked-brands"
+              className="input"
+              value={blockedBrandsText}
+              onChange={(e) => onBlockedBrandsChange(e.target.value)}
+              placeholder="예: 나우, 샤크, 신일 — 브라우저에 저장되어 다음에도 남습니다"
             />
           </div>
           <button type="button" className="btn primary" onClick={run} disabled={loading}>

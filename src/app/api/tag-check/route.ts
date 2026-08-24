@@ -13,7 +13,7 @@ export const dynamic = 'force-dynamic';
 const MAX_TAGS = 20;
 
 export async function POST(req: Request) {
-  let body: { tags?: string[] | string; ownBrands?: string[] };
+  let body: { tags?: string[] | string; ownBrands?: string[]; blockedBrands?: string[] };
   try {
     body = await req.json();
   } catch {
@@ -57,6 +57,7 @@ export async function POST(req: Request) {
       monthlySearches,
       seasonality,
       ownBrands: body.ownBrands ?? [],
+      blockedBrands: body.blockedBrands ?? [],
     });
   });
 

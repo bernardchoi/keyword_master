@@ -82,6 +82,16 @@ describe('suggestTags', () => {
     expect(result.candidates[0].score).toBe(Math.round(100 * 0.1));
   });
 
+  it('blockedBrands 로 보탠 단어는 코드의 BRAND_WORDS 에 없어도 걸러진다', () => {
+    const rows = [rowWithGrade('무명브랜드원피스', 900, '보통')];
+    const withoutBlock = suggestTags(rows, seed, '');
+    expect(withoutBlock.candidates.map((c) => c.tag)).toContain('무명브랜드원피스');
+
+    const withBlock = suggestTags(rows, seed, '', [], ['무명브랜드']);
+    expect(withBlock.candidates).toHaveLength(0);
+    expect(withBlock.droppedBlocked).toBe(1);
+  });
+
   it('head 를 못 찾으면(null) 품목 필터를 걸지 않는다', () => {
     const rows = [rowWithGrade('전혀다른키워드', 100, '보통')];
     const result = suggestTags(rows, '유니크시드단하나', '');
