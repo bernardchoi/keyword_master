@@ -1,14 +1,33 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import type { AnalyzeResponse } from '@/lib/types';
-import { analyzeName, RECOMMENDED_LEN } from '@/lib/product-name';
+import { analyzeName, NameAnalysis, RECOMMENDED_LEN } from '@/lib/product-name';
+import type { TagCheckIssue } from '@/lib/types';
 import { exportProductNameCsv } from '@/lib/export';
 import { compact, n } from '@/lib/format';
 
 /** 화면에 한 번에 보여 줄 개수. CSV 에는 전부 들어간다. */
 const SHOW_SUGGESTIONS = 12;
 const SHOW_MISSED = 12;
+
+const shareOf = (result: NameAnalysis | null, totalVolume: number) =>
+  totalVolume > 0 ? (result?.coveredVolume ?? 0) / totalVolume : 0;
+
+/** A/B 비교표의 "검사 결과" 칸 — 불가가 하나라도 있으면 눈에 띄게 표시한다 */
+function issueSummary(issues: TagCheckIssue[]) {
+  if (issues.length === 0) return <span className="muted">문제 없음</span>;
+  const block = issues.filter((i) => i.level === 'block').length;
+  const warn = issues.filter((i) => i.level === 'warn').length;
+  if (block === 0 && warn === 0) return <span className="muted">확인 사항 있음</span>;
+  return (
+    <>
+      {block > 0 && <span style={{ color: 'var(--g-worst)', fontWeight: 700 }}>불가 {block}</span>}
+      {block > 0 && warn > 0 && ' · '}
+      {warn > 0 && <span style={{ color: 'var(--g-mid)' }}>주의 {warn}</span>}
+    </>
+  );
+}
 
 /**
  * 계산이 전부 순수 함수라 서버를 거치지 않는다 —
@@ -38,6 +57,12 @@ export default function ProductNameOptimizer({
   const setName = onNameChange;
   const setBrands = onBrandsChange;
 
+  // A/B 비교 — 태그 추천은 A(name)만 참조하므로(page.tsx 가 들고 있는 공유 상태),
+  // B 는 이 화면에서만 쓰는 지역 상태로 둔다.
+  const [compareOn, setCompareOn] = useState(false);
+  const [compareName, setCompareName] = useState('');
+  const [focus, setFocus] = useState<'A' | 'B'>('A');
+
   const ownBrands = useMemo(
     () => brands.split(/[\n,]/).map((b) => b.trim()).filter(Boolean),
     [brands],
@@ -51,6 +76,13 @@ export default function ProductNameOptimizer({
     () => (data ? analyzeName(name, data.rows, data.keyword, ownBrands, blockedBrands) : null),
     [data, name, ownBrands, blockedBrands],
   );
+  const resultB = useMemo(
+    () =>
+      data && compareOn
+        ? analyzeName(compareName, data.rows, data.keyword, ownBrands, blockedBrands)
+        : null,
+    [data, compareOn, compareName, ownBrands, blockedBrands],
+  );
 
   if (!data) {
     return (
@@ -62,7 +94,14 @@ export default function ProductNameOptimizer({
   }
 
   const totalVolume = data.rows.reduce((s, r) => s + r.totalSearches, 0);
-  const share = totalVolume > 0 ? (result?.coveredVolume ?? 0) / totalVolume : 0;
+
+  // 상세 섹션(이슈·추천 단어·걸리는 검색어)은 A/B 중 하나만 아래에 펼친다 —
+  // 나란히 두 벌을 다 보여 주면 화면이 두 배로 늘어져 오히려 비교하기 어렵다.
+  // 요약 비교표는 항상 둘 다 보여 주고, 상세는 토글로 고른다.
+  const showingB = compareOn && focus === 'B';
+  const active = showingB ? resultB : result;
+  const activeName = showingB ? compareName : name;
+  const activeSetName = showingB ? setCompareName : setName;
 
   return (
     <>
@@ -75,19 +114,30 @@ export default function ProductNameOptimizer({
             </p>
           </div>
           <span className="spacer" />
-          {result && result.tokens.length > 0 && (
+          <button
+            type="button"
+            className="btn sm"
+            onClick={() => {
+              setCompareOn((v) => !v);
+              setFocus('A');
+            }}
+          >
+            {compareOn ? 'B안 비교 그만하기' : 'B안과 비교'}
+          </button>
+          {active && active.tokens.length > 0 && (
             <button
               type="button"
               className="btn sm"
-              onClick={() => exportProductNameCsv(data.keyword, name, result)}
+              onClick={() => exportProductNameCsv(data.keyword, activeName, active)}
+              title={compareOn ? `현재 보고 있는 ${showingB ? 'B' : 'A'}안을 내보냅니다` : undefined}
             >
-              엑셀 내보내기
+              엑셀 내보내기{compareOn ? ` (${showingB ? 'B' : 'A'})` : ''}
             </button>
           )}
         </div>
         <div className="card-pad">
           <div className="field" style={{ marginBottom: 12 }}>
-            <label htmlFor="pn-name">상품명 (단어를 띄어 쓰세요)</label>
+            <label htmlFor="pn-name">{compareOn ? '상품명 A (단어를 띄어 쓰세요)' : '상품명 (단어를 띄어 쓰세요)'}</label>
             <input
               id="pn-name"
               className="input"
@@ -96,6 +146,18 @@ export default function ProductNameOptimizer({
               placeholder="예: 여성 여름 린넨 롱 원피스"
             />
           </div>
+          {compareOn && (
+            <div className="field" style={{ marginBottom: 12 }}>
+              <label htmlFor="pn-name-b">상품명 B (비교할 후보)</label>
+              <input
+                id="pn-name-b"
+                className="input"
+                value={compareName}
+                onChange={(e) => setCompareName(e.target.value)}
+                placeholder="예: 여성 여름 린넨 원피스 미니"
+              />
+            </div>
+          )}
           <div className="field">
             <label htmlFor="pn-brands">내가 직접 취급하는 브랜드 (선택 — 상표 오탐 방지)</label>
             <input
@@ -121,10 +183,102 @@ export default function ProductNameOptimizer({
         </div>
       </div>
 
-      {result && result.issues.length > 0 && (
+      {compareOn && result && resultB && result.tokens.length > 0 && resultB.tokens.length > 0 && (
+        <div className="card" style={{ marginBottom: 18 }}>
+          <div className="card-head">
+            <div>
+              <h2 className="card-title">A / B 비교</h2>
+              <p className="card-sub">
+                커버 검색량이 크고 이슈가 적은 쪽이 유리합니다 · 굵게 표시된 쪽이 더 좋은 값입니다
+              </p>
+            </div>
+          </div>
+          <div className="tablewrap">
+            <table className="kw">
+              <thead>
+                <tr>
+                  <th className="left">항목</th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`btn sm ${!showingB ? 'primary' : ''}`}
+                      onClick={() => setFocus('A')}
+                    >
+                      A 상세 보기
+                    </button>
+                  </th>
+                  <th>
+                    <button
+                      type="button"
+                      className={`btn sm ${showingB ? 'primary' : ''}`}
+                      onClick={() => setFocus('B')}
+                    >
+                      B 상세 보기
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr>
+                  <td className="left">상품명</td>
+                  <td className="left" style={{ fontSize: 12 }}>{name}</td>
+                  <td className="left" style={{ fontSize: 12 }}>{compareName}</td>
+                </tr>
+                <tr>
+                  <td className="left">글자수</td>
+                  <td>
+                    {result.length}자
+                    {result.budgetLeft < 0 && (
+                      <span style={{ color: 'var(--g-worst)' }}> ({RECOMMENDED_LEN}자 초과)</span>
+                    )}
+                  </td>
+                  <td>
+                    {resultB.length}자
+                    {resultB.budgetLeft < 0 && (
+                      <span style={{ color: 'var(--g-worst)' }}> ({RECOMMENDED_LEN}자 초과)</span>
+                    )}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="left">커버 검색량</td>
+                  <td style={result.coveredVolume >= resultB.coveredVolume ? { fontWeight: 700 } : undefined}>
+                    {compact(result.coveredVolume)}
+                  </td>
+                  <td style={resultB.coveredVolume > result.coveredVolume ? { fontWeight: 700 } : undefined}>
+                    {compact(resultB.coveredVolume)}
+                  </td>
+                </tr>
+                <tr>
+                  <td className="left">걸리는 검색어</td>
+                  <td style={result.covered.length >= resultB.covered.length ? { fontWeight: 700 } : undefined}>
+                    {result.covered.length}개
+                  </td>
+                  <td style={resultB.covered.length > result.covered.length ? { fontWeight: 700 } : undefined}>
+                    {resultB.covered.length}개
+                  </td>
+                </tr>
+                <tr>
+                  <td className="left">검사 결과</td>
+                  <td>{issueSummary(result.issues)}</td>
+                  <td>{issueSummary(resultB.issues)}</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {compareOn && showingB && !compareName.trim() && (
+        <div className="empty">
+          <h3>B안을 입력하세요</h3>
+          <p>위 &ldquo;상품명 B&rdquo; 칸에 비교할 후보를 입력하면 여기 상세 분석이 나타납니다.</p>
+        </div>
+      )}
+
+      {active && active.issues.length > 0 && (
         <div className="card" style={{ marginBottom: 18 }}>
           <div className="card-pad">
-            {result.issues.map((issue, i) => (
+            {active.issues.map((issue, i) => (
               <div className={`issue ${issue.level}`} key={`${issue.code}-${i}`}>
                 <span className="dot" />
                 <span>{issue.message}</span>
@@ -134,62 +288,67 @@ export default function ProductNameOptimizer({
         </div>
       )}
 
-      {result && result.tokens.length > 0 && (
+      {active && active.tokens.length > 0 && (
         <>
+          {compareOn && (
+            <p className="card-sub" style={{ margin: '0 0 10px' }}>
+              아래 상세는 <strong>{showingB ? 'B안' : 'A안'}</strong> 기준입니다.
+            </p>
+          )}
           <div className="stats">
             <div className="stat">
               <div className="stat-label">커버 검색량</div>
-              <div className="stat-value">{compact(result.coveredVolume)}</div>
+              <div className="stat-value">{compact(active.coveredVolume)}</div>
               <div className="stat-sub">
-                연관 키워드 전체 검색량의 {(share * 100).toFixed(0)}%
+                연관 키워드 전체 검색량의 {(shareOf(active, totalVolume) * 100).toFixed(0)}%
               </div>
             </div>
             <div className="stat">
               <div className="stat-label">걸리는 검색어</div>
-              <div className="stat-value">{n(result.covered.length)}</div>
+              <div className="stat-value">{n(active.covered.length)}</div>
               <div className="stat-sub">{data.rows.length}개 중</div>
             </div>
             <div className="stat">
               <div className="stat-label">상품명 길이</div>
-              <div className="stat-value">{result.length}자</div>
+              <div className="stat-value">{active.length}자</div>
               {/* 네이버 권장 50자를 '남은 글자 예산'으로 보여 준다.
                   고정된 "권장 50자" 문구보다 지금 몇 자를 더 쓸 수 있는지가 바로 쓰인다. */}
               <div className="stat-sub">
-                {result.budgetLeft >= 0 ? (
+                {active.budgetLeft >= 0 ? (
                   <>
-                    {RECOMMENDED_LEN}자까지 {result.budgetLeft}자 남음
+                    {RECOMMENDED_LEN}자까지 {active.budgetLeft}자 남음
                   </>
                 ) : (
                   <strong style={{ color: 'var(--g-worst)' }}>
-                    권장 {RECOMMENDED_LEN}자를 {-result.budgetLeft}자 넘음
+                    권장 {RECOMMENDED_LEN}자를 {-active.budgetLeft}자 넘음
                   </strong>
                 )}
-                {' · '}토큰 {result.tokens.length}개
+                {' · '}토큰 {active.tokens.length}개
               </div>
             </div>
             <div className="stat">
               <div className="stat-label">추정 상품유형</div>
               <div className="stat-value" style={{ fontSize: 20 }}>
-                {result.head ?? '–'}
+                {active.head ?? '–'}
               </div>
               <div className="stat-sub">
-                {result.head
-                  ? `연관 키워드 중 ${result.sameTypeCount}개가 같은 품목`
+                {active.head
+                  ? `연관 키워드 중 ${active.sameTypeCount}개가 같은 품목`
                   : '품목을 추정하지 못했습니다'}
               </div>
             </div>
           </div>
 
-          {result.suggestions.length > 0 && (
+          {active.suggestions.length > 0 && (
             <div className="card" style={{ marginBottom: 18 }}>
               <div className="card-head">
                 <div>
                   <h2 className="card-title">추가할 단어</h2>
                   <p className="card-sub">
-                    같은 품목({result.head}) 수식어만 후보 · 글자당 이득 순 ·
+                    같은 품목({active.head}) 수식어만 후보 · 글자당 이득 순 ·
                     확인이 필요한 <span className="muted">⚠</span> 는 아래로 내립니다
-                    {result.suggestions.length > SHOW_SUGGESTIONS &&
-                      ` · ${result.suggestions.length}개 중 상위 ${SHOW_SUGGESTIONS}개 (전체는 엑셀로)`}
+                    {active.suggestions.length > SHOW_SUGGESTIONS &&
+                      ` · ${active.suggestions.length}개 중 상위 ${SHOW_SUGGESTIONS}개 (전체는 엑셀로)`}
                   </p>
                 </div>
               </div>
@@ -204,7 +363,7 @@ export default function ProductNameOptimizer({
                     </tr>
                   </thead>
                   <tbody>
-                    {result.suggestions.slice(0, SHOW_SUGGESTIONS).map((s) => (
+                    {active.suggestions.slice(0, SHOW_SUGGESTIONS).map((s) => (
                       // 예산을 넘기는 후보는 흐리게. 막지는 않는다 —
                       // 다른 단어를 빼고 넣는 선택은 사용자 몫이다.
                       <tr key={s.token} style={s.fitsBudget ? undefined : { opacity: 0.55 }}>
@@ -212,7 +371,7 @@ export default function ProductNameOptimizer({
                           <button
                             type="button"
                             className="chip"
-                            onClick={() => setName(`${name.trim()} ${s.token}`.trim())}
+                            onClick={() => activeSetName(`${activeName.trim()} ${s.token}`.trim())}
                             title="상품명에 추가"
                           >
                             + {s.token}
@@ -263,20 +422,20 @@ export default function ProductNameOptimizer({
           <div className="card">
             <div className="card-head">
               <div>
-                <h2 className="card-title">걸리는 검색어 {result.covered.length}개</h2>
+                <h2 className="card-title">걸리는 검색어 {active.covered.length}개</h2>
                 <p className="card-sub">
-                  못 걸린 검색어의 합산 검색량 {compact(result.missedVolume)}
+                  못 걸린 검색어의 합산 검색량 {compact(active.missedVolume)}
                 </p>
               </div>
             </div>
             <div className="card-pad">
-              {result.covered.length === 0 ? (
+              {active.covered.length === 0 ? (
                 <p className="muted" style={{ margin: 0, fontSize: 13 }}>
                   아직 걸리는 검색어가 없습니다. 위 &ldquo;추가할 단어&rdquo;부터 넣어 보세요.
                 </p>
               ) : (
                 <div className="chiprow" style={{ marginTop: 0 }}>
-                  {result.covered.map((c) => (
+                  {active.covered.map((c) => (
                     <span className="chip" style={{ cursor: 'default' }} key={c.keyword}>
                       {c.keyword}
                       <span className="muted"> {compact(c.totalSearches)}</span>
@@ -285,15 +444,15 @@ export default function ProductNameOptimizer({
                 </div>
               )}
 
-              {result.missed.length > 0 && (
+              {active.missed.length > 0 && (
                 <>
                   <p className="footnote" style={{ marginBottom: 6 }}>
-                    <strong>못 걸린 검색어 상위 {Math.min(result.missed.length, SHOW_MISSED)}개</strong>
-                    {result.missed.length > SHOW_MISSED && ` (전체 ${result.missed.length}개는 엑셀로)`}
+                    <strong>못 걸린 검색어 상위 {Math.min(active.missed.length, SHOW_MISSED)}개</strong>
+                    {active.missed.length > SHOW_MISSED && ` (전체 ${active.missed.length}개는 엑셀로)`}
                     {' '}— 같은 품목이 아닌 것도 섞여 있습니다. 내 상품과 무관하면 무시하세요.
                   </p>
                   <div className="chiprow" style={{ marginTop: 0 }}>
-                    {result.missed.slice(0, SHOW_MISSED).map((c) => (
+                    {active.missed.slice(0, SHOW_MISSED).map((c) => (
                       <span
                         className="chip"
                         style={{ cursor: 'default', opacity: 0.6 }}
