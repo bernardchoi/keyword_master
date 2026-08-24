@@ -42,7 +42,7 @@ export async function GET(req: Request) {
     fetchNewsItems(keyword),
   ]);
 
-  const categories = catRes.status === 'fulfilled' ? catRes.value : [];
+  const categories = catRes.status === 'fulfilled' ? catRes.value.candidates : [];
   if (catRes.status === 'rejected') note('카테고리 추정', catRes.reason);
 
   const searchTrend = seasonRes.status === 'fulfilled' ? seasonRes.value : [];

@@ -1,4 +1,4 @@
-import { cached } from './cache';
+import { cached, cachedWithMeta } from './cache';
 import { isPartialMonth, monthRange } from './date';
 import { getProvider, shoppingInsightUrl } from './openapi';
 import { mapLimit } from './metrics';
@@ -88,14 +88,20 @@ function completeMonths(data: InsightPoint[]): InsightPoint[] {
  * 그래서 '데이터가 잡힌 개월 수(coverage)'를 1차 기준으로 삼고,
  * 하나로 단정하지 않고 후보를 여러 개 돌려준다.
  */
+export interface CategoryInference {
+  candidates: CategoryCandidate[];
+  /** 이번 호출이 캐시에서 왔는가 — 화면에 "캐시된 결과"를 보여 주는 데 쓴다 */
+  cacheHit: boolean;
+}
+
 export async function inferCategories(
   keyword: string,
   months = 12,
-): Promise<CategoryCandidate[]> {
+): Promise<CategoryInference> {
   const range = monthRange(months);
   const key = `cat:${keyword}:${range.startDate}`;
 
-  return cached(key, TTL, async () => {
+  const { value: candidates, hit } = await cachedWithMeta(key, TTL, async () => {
     const scanned = await mapLimit(CATEGORIES, 4, async ({ code, name }) => {
       try {
         const json = await post('/category/keywords', {
@@ -134,6 +140,8 @@ export async function inferCategories(
       // 데이터가 잡힌 개월 수 우선, 같으면 평균 지수
       .sort((a, b) => b.periods - a.periods || b.avgIndex - a.avgIndex);
   });
+
+  return { candidates, cacheHit: hit };
 }
 
 /** group 별로 ratio 합을 내어 비중(합 1)으로 환산 */

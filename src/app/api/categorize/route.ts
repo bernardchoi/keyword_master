@@ -44,20 +44,26 @@ export async function POST(req: Request) {
   // 여기서는 2개씩만 돌려 초당 호출 상한(50 RPS)에 여유를 둔다.
   const results = await mapLimit(keywords, 2, async (keyword) => {
     try {
-      const candidates = await inferCategories(keyword, 12);
-      return { keyword, categories: candidates.slice(0, 3) };
+      const { candidates, cacheHit } = await inferCategories(keyword, 12);
+      return { keyword, categories: candidates.slice(0, 3), cacheHit };
     } catch (err) {
       warnings.push(
         `${keyword}: ${err instanceof Error ? err.message : String(err)}`,
       );
-      return { keyword, categories: [] as CategoryCandidate[] };
+      return { keyword, categories: [] as CategoryCandidate[], cacheHit: false };
     }
   });
+
+  // 실제로 캐시에서 왔다고 "확인된" 개수 — README/화면이 "캐시된다"고 주장만
+  // 하고 근거를 안 보여 주면 사용자는 매번 새로 도는 줄 안다.
+  const cacheHits = results.filter((r) => r.cacheHit).length;
 
   return NextResponse.json({
     results,
     analyzed: keywords.length,
-    calls: keywords.length * CATEGORIES.length,
+    // 캐시에서 온 키워드는 실제로 호출하지 않았다 — 그만큼 뺀 실제 호출 수.
+    calls: (keywords.length - cacheHits) * CATEGORIES.length,
+    cacheHits,
     tookMs: Date.now() - started,
     warnings,
   });

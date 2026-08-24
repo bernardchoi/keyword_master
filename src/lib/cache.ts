@@ -46,13 +46,27 @@ export function cacheSet<T>(key: string, value: T, ttlMs = DEFAULT_TTL): T {
   return value;
 }
 
-export async function cached<T>(
+export interface CachedResult<T> {
+  value: T;
+  /** L1(메모리)·L2(Redis) 어느 쪽이든 캐시에서 읽었으면 true */
+  hit: boolean;
+}
+
+/**
+ * `cached()` 와 동작은 같지만 캐시 적중 여부를 함께 돌려준다.
+ *
+ * 화면에 "캐시된 결과입니다"를 보여 주려면(카테고리 분류처럼 호출이
+ * 비싼 기능) 이 값이 필요하다. 대부분의 호출부는 값만 있으면 되므로
+ * `cached()` 를 그대로 쓰고, 캐시 여부를 화면까지 보여 줘야 하는
+ * 소수의 호출부만 이 함수를 쓴다.
+ */
+export async function cachedWithMeta<T>(
   key: string,
   ttlMs: number,
   fn: () => Promise<T>,
-): Promise<T> {
+): Promise<CachedResult<T>> {
   const memHit = cacheGet<T>(key);
-  if (memHit !== undefined) return memHit;
+  if (memHit !== undefined) return { value: memHit, hit: true };
 
   if (kvEnabled) {
     try {
@@ -61,7 +75,7 @@ export async function cached<T>(
         const value = JSON.parse(raw) as T;
         // 다음 조회는 이 인스턴스가 살아 있는 동안 왕복 없이 메모리로 바로 응답한다.
         cacheSet(key, value, ttlMs);
-        return value;
+        return { value, hit: true };
       }
     } catch (err) {
       // Redis 가 잠깐 죽어도 앱까지 죽으면 안 된다 — 직접 계산으로 조용히 물러난다.
@@ -81,5 +95,13 @@ export async function cached<T>(
     }
   }
 
-  return value;
+  return { value, hit: false };
+}
+
+export async function cached<T>(
+  key: string,
+  ttlMs: number,
+  fn: () => Promise<T>,
+): Promise<T> {
+  return (await cachedWithMeta(key, ttlMs, fn)).value;
 }

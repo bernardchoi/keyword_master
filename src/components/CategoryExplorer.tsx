@@ -10,12 +10,14 @@ const CALLS_PER_KEYWORD = 11;
 interface Result {
   keyword: string;
   categories: CategoryCandidate[];
+  /** 이 키워드 결과가 캐시에서 왔는가 — 다시 눌러도 API 를 안 쓴다는 증거를 화면에 보여 준다 */
+  cacheHit: boolean;
 }
 
 interface Group {
   code: string;
   name: string;
-  items: { keyword: string; totalSearches: number; periods: number }[];
+  items: { keyword: string; totalSearches: number; periods: number; cacheHit: boolean }[];
   totalSearches: number;
 }
 
@@ -82,7 +84,7 @@ export default function CategoryExplorer({
         totalSearches: 0,
       };
       const vol = volumeOf.get(r.keyword) ?? 0;
-      g.items.push({ keyword: r.keyword, totalSearches: vol, periods: top.periods });
+      g.items.push({ keyword: r.keyword, totalSearches: vol, periods: top.periods, cacheHit: r.cacheHit });
       g.totalSearches += vol;
       map.set(top.code, g);
     }
@@ -141,6 +143,15 @@ export default function CategoryExplorer({
 
       {results && !loading && (
         <>
+          {results.some((r) => r.cacheHit) && (
+            <div className="notice info" style={{ marginBottom: 16 }}>
+              <span>⚡</span>
+              <span>
+                {results.filter((r) => r.cacheHit).length}/{results.length}개는 캐시된 결과입니다
+                (⚡ 표시 — 다시 호출하지 않고 즉시 표시했습니다).
+              </span>
+            </div>
+          )}
           <div className="groupgrid">
             {groups.map((g) => (
               <div className="group" key={g.code}>
@@ -159,9 +170,12 @@ export default function CategoryExplorer({
                       className="chip"
                       key={it.keyword}
                       onClick={() => onPick(it.keyword)}
-                      title={`검색량 ${compact(it.totalSearches)} · 데이터 ${it.periods}개월`}
+                      title={
+                        `검색량 ${compact(it.totalSearches)} · 데이터 ${it.periods}개월` +
+                        (it.cacheHit ? ' · 캐시된 결과 (재호출 없음)' : '')
+                      }
                     >
-                      {it.keyword}
+                      {it.cacheHit && <span title="캐시된 결과">⚡</span>} {it.keyword}
                     </button>
                   ))}
                 </div>
