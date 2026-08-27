@@ -52,7 +52,7 @@ curl -sL "$URL/sitemap.xml" | grep -c "<loc>"
 14일 뒤 비교가 가능하다:**
 
 - [ ] Google Search Console: 최근 28일 노출·클릭·평균 순위 (도메인 소유 확인 필요)
-- [ ] 네이버 서치어드바이저: 콘텐츠 노출/클릭, 검색어 Top 목록 (미등록 상태로 추정 — 아래 "필요한 사용자 조치" 참고)
+- [ ] 네이버 서치어드바이저: 콘텐츠 노출/클릭, 검색어 Top 목록 (2026-08-27 소유확인 완료, 지표는 아직 쌓이지 않음 — 사이트맵 제출·수집요청 후 누적 대기)
 - [ ] AI 인용 확인: 아래 질문 6개를 Perplexity·ChatGPT(검색 모드)·네이버 AI 브리핑에 실제로 던져 출처 인용 여부 O/X 기록
   - 네이버 키워드 검색량 어떻게 조회하나요?
   - 네이버 블로그 경쟁강도는 어떻게 계산하나요?
@@ -65,8 +65,20 @@ curl -sL "$URL/sitemap.xml" | grep -c "<loc>"
 ## 필요한 사용자 조치 (에이전트가 대신할 수 없음)
 
 1. **Google Search Console**: 프로퍼티 등록 → 소유 확인(DNS 또는 메타 태그) → `sitemap.xml` 제출
-2. **네이버 서치어드바이저** (searchadvisor.naver.com): 사이트 등록 → 소유 확인 → 사이트맵 제출 →
-   신규 가이드 페이지 6종 수동 수집 요청 (등록 직후 색인 가속)
+2. **네이버 서치어드바이저** (searchadvisor.naver.com)
+   - [x] 사이트 등록 · 소유 확인 — HTML 태그 방식, 2026-08-27 완료
+     ([layout.tsx](../src/app/layout.tsx)의 `NAVER_SITE_VERIFICATION`)
+   - [ ] 사이트맵 제출: 서치어드바이저 좌측 메뉴 **요청 → 사이트맵 제출**에서
+     `sitemap.xml`(전체 URL이 아니라 파일명만) 입력
+   - [ ] 수집 요청: **요청 → 웹페이지 수집**에서 신규 페이지 8종을 우선 등록해 색인 가속
+     - `https://keyword-master-delta.vercel.app/`
+     - `https://keyword-master-delta.vercel.app/guide`
+     - `https://keyword-master-delta.vercel.app/guide/naver-keyword-search-volume`
+     - `https://keyword-master-delta.vercel.app/guide/naver-blog-competition`
+     - `https://keyword-master-delta.vercel.app/guide/product-name-optimization`
+     - `https://keyword-master-delta.vercel.app/guide/naver-shopping-tag-count`
+     - `https://keyword-master-delta.vercel.app/guide/blog-rank-check`
+     - `https://keyword-master-delta.vercel.app/guide/keyword-seasonality`
 3. 두 도구 모두 등록 후 **주 1회** 노출/클릭 스냅샷을 이 문서 하단 "재측정 로그"에 추가
 
 ## 재측정 예약
