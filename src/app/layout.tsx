@@ -1,12 +1,21 @@
 import type { Metadata } from 'next';
 import './globals.css';
-import { FEATURES, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site';
+import {
+  FEATURES,
+  NAVER_SITE_VERIFICATION,
+  SITE_DESCRIPTION,
+  SITE_NAME,
+  SITE_TITLE,
+  SITE_URL,
+} from '@/lib/site';
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: SITE_TITLE,
   description: SITE_DESCRIPTION,
   alternates: { canonical: '/' },
+  // 네이버 서치어드바이저 소유확인(HTML 태그 방식) — <head>에 naver-site-verification 메타 태그로 렌더된다.
+  verification: { other: { 'naver-site-verification': NAVER_SITE_VERIFICATION } },
   openGraph: {
     title: SITE_TITLE,
     description: SITE_DESCRIPTION,

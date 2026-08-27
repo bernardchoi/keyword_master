@@ -8,6 +8,11 @@ export const SITE_NAME = '키워드 마스터';
 // 값이 아니라 값의 날짜를 감시하라는 원칙(measure.md)에 따라 갱신할 때마다 이 값도 같이 고친다.
 export const CONTENT_REVIEWED_AT = '2026-08-27';
 
+// 네이버 서치어드바이저 사이트 소유확인용 메타 태그 값 (HTML 태그 방식).
+// searchadvisor.naver.com에서 도메인당 한 번 발급받는 값이라, 다른 배포/도메인에서는
+// 새로 등록해야 한다 — 이 상수만 바꾸면 된다.
+export const NAVER_SITE_VERIFICATION = '67bd5c18d46b9d15560d0f3bf97ae865aa4dce6b';
+
 export const SITE_TITLE =
   '네이버 키워드 검색량·경쟁강도 분석 · 상품명 최적화 · 쇼핑 태그 추천 | 키워드 마스터';
 
