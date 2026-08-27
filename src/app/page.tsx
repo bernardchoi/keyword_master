@@ -138,6 +138,9 @@ export default function Home() {
           <Link href="/guide" className="navlink">
             가이드
           </Link>
+          <Link href="/audit" className="navlink">
+            SEO 진단
+          </Link>
           <span className="spacer" />
           {status && (
             <>

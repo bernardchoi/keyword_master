@@ -20,6 +20,12 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: 'monthly',
       priority: 0.8,
     },
+    {
+      url: `${SITE_URL}/audit`,
+      lastModified: guideModified,
+      changeFrequency: 'monthly',
+      priority: 0.9,
+    },
     ...GUIDES.map((g) => ({
       url: `${SITE_URL}/guide/${g.slug}`,
       lastModified: guideModified,
