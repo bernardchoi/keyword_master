@@ -15,8 +15,10 @@ import { useFavorites } from '@/hooks/useFavorites';
 import { useLocalStorageText } from '@/hooks/useLocalStorageText';
 import { useAnalysisHistory } from '@/hooks/useAnalysisHistory';
 import { computeHistoryDiff, snapshotFromAnalysis, type HistoryDiffResult } from '@/lib/history';
+import Link from 'next/link';
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
 import type { AnalyzeResponse, TrendPoint } from '@/lib/types';
+import { FEATURES, SITE_DESCRIPTION } from '@/lib/site';
 
 type Tab =
   | 'keywords'
@@ -133,6 +135,9 @@ export default function Home() {
             <span className="logo-mark">K</span>
             키워드 마스터
           </div>
+          <Link href="/guide" className="navlink">
+            가이드
+          </Link>
           <span className="spacer" />
           {status && (
             <>
@@ -148,6 +153,28 @@ export default function Home() {
       </header>
 
       <main className="shell">
+        {/* 크롤러 눈으로 볼 때 이 페이지가 무엇인지 알려주는 유일한 h1·본문 문단.
+            아래 목록 항목명은 JSON-LD의 featureList(src/lib/site.ts)와 100% 동일해야 한다. */}
+        <section className="intro">
+          <h1>네이버 키워드 검색량 · 경쟁강도 분석</h1>
+          <p>{SITE_DESCRIPTION}</p>
+          <ul className="intro-features">
+            {FEATURES.map((f) => (
+              <li key={f.name}>
+                <strong>{f.name}</strong> — {f.description}
+                {'guideSlug' in f && (
+                  <>
+                    {' '}
+                    <Link href={`/guide/${f.guideSlug}`} className="intro-guidelink">
+                      계산 방식 보기 →
+                    </Link>
+                  </>
+                )}
+              </li>
+            ))}
+          </ul>
+        </section>
+
         <div className="card" style={{ marginBottom: 20 }}>
           <div className="card-pad">
             <div className="searchrow">

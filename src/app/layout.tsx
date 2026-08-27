@@ -1,16 +1,63 @@
 import type { Metadata } from 'next';
 import './globals.css';
+import { FEATURES, SITE_DESCRIPTION, SITE_NAME, SITE_TITLE, SITE_URL } from '@/lib/site';
 
 export const metadata: Metadata = {
-  title: '키워드 마스터 — 네이버 키워드 검색량 · 경쟁강도 분석',
-  description:
-    '네이버 검색광고 API 와 오픈 API 로 월간 검색수, 경쟁강도, 연관 키워드, 카테고리, 쇼핑 태그 등록 가능 여부를 한 번에 분석합니다.',
+  metadataBase: new URL(SITE_URL),
+  title: SITE_TITLE,
+  description: SITE_DESCRIPTION,
+  alternates: { canonical: '/' },
+  openGraph: {
+    title: SITE_TITLE,
+    description: SITE_DESCRIPTION,
+    url: SITE_URL,
+    siteName: SITE_NAME,
+    locale: 'ko_KR',
+    type: 'website',
+  },
+};
+
+// WebApplication 구조화 데이터. FEATURES는 page.tsx의 가시 텍스트와 같은 배열(src/lib/site.ts)을
+// 참조한다 — 화면에 없는 내용을 LD에 넣지 않기 위해서다.
+const jsonLd = {
+  '@context': 'https://schema.org',
+  '@type': 'WebApplication',
+  '@id': `${SITE_URL}/#webapp`,
+  name: SITE_NAME,
+  url: SITE_URL,
+  description: SITE_DESCRIPTION,
+  applicationCategory: 'BusinessApplication',
+  operatingSystem: 'Web',
+  inLanguage: 'ko-KR',
+  isAccessibleForFree: true,
+  offers: {
+    '@type': 'Offer',
+    price: '0',
+    priceCurrency: 'KRW',
+  },
+  featureList: FEATURES.map((f) => f.name),
+  provider: {
+    '@type': 'Organization',
+    '@id': `${SITE_URL}/#organization`,
+    name: SITE_NAME,
+    url: SITE_URL,
+    // 실제로 존재·공개 확인된 표면만 연결한다(llmo.md) — 확인 안 된 소셜 계정을
+    // 지어내면 모델이 엉뚱한 실체와 엔티티를 섞는 역효과가 난다.
+    sameAs: ['https://github.com/bernardchoi/keyword_master'],
+  },
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="ko">
-      <body>{children}</body>
+      <body>
+        <script
+          type="application/ld+json"
+          // eslint-disable-next-line react/no-danger
+          dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
+        />
+        {children}
+      </body>
     </html>
   );
 }
