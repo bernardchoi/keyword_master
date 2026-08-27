@@ -13,6 +13,7 @@ export function GET() {
 
 ## 핵심 페이지
 - [키워드 마스터 — 도구 홈](${SITE_URL}/): 키워드 검색, 상품명 최적화, 쇼핑 태그 검사, 순위 조회를 실행하는 본체
+- [SEO·GEO 무료 진단](${SITE_URL}/audit): 임의의 URL을 입력하면 h1·메타·robots.txt·sitemap.xml·JSON-LD·llms.txt를 서버가 직접 확인해 판정
 - [가이드 목록](${SITE_URL}/guide): 아래 질문별 페이지 허브
 
 ## 질문별 가이드

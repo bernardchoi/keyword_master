@@ -106,6 +106,25 @@ a:hover { text-decoration: underline; }
 @media (prefers-color-scheme: dark) { .badge.warn { color: #fbbf24; } }
 .badge.ok { border-color: #03c75a55; background: var(--accent-soft); color: #047857; }
 @media (prefers-color-scheme: dark) { .badge.ok { color: #4ade80; } }
+.badge.err { border-color: #dc262655; background: #dc262614; color: #b91c1c; }
+@media (prefers-color-scheme: dark) { .badge.err { color: #f87171; } }
+
+/* ─── SEO 진단 도구 (/audit) ───────────────────────────────── */
+.audit-list { list-style: none; margin: 0; padding: 0; }
+.audit-check {
+  display: flex; gap: 12px; align-items: flex-start;
+  padding: 12px 18px; border-top: 1px solid var(--border);
+}
+.audit-check:first-child { border-top: none; }
+.audit-check-status {
+  flex: 0 0 84px; font-size: 12px; font-weight: 750; white-space: nowrap; padding-top: 1px;
+}
+.audit-check--pass .audit-check-status { color: var(--g-good); }
+.audit-check--warn .audit-check-status { color: var(--g-mid); }
+.audit-check--fail .audit-check-status { color: var(--g-worst); }
+.audit-check-body { display: flex; flex-direction: column; gap: 3px; }
+.audit-check-body strong { font-size: 13.5px; color: var(--text); }
+.audit-check-detail { font-size: 12.5px; color: var(--text-2); line-height: 1.6; }
 
 /* ─── 탭 ───────────────────────────────────────────────────── */
 .tabs {
