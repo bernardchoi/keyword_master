@@ -8,6 +8,7 @@ import ProductNameOptimizer from '@/components/ProductNameOptimizer';
 import TagChecker from '@/components/TagChecker';
 import RankChecker from '@/components/RankChecker';
 import InsightPanel from '@/components/InsightPanel';
+import CategoryTrends from '@/components/CategoryTrends';
 import TrendChart from '@/components/TrendChart';
 import HistoryDiffBanner from '@/components/HistoryDiff';
 import BatchOptimizer from '@/components/BatchOptimizer';
@@ -28,6 +29,7 @@ type Tab =
   | 'tag'
   | 'rank'
   | 'batch'
+  | 'shoppingTrend'
   | 'favorites';
 
 const TABS: { id: Tab; label: string }[] = [
@@ -38,6 +40,7 @@ const TABS: { id: Tab; label: string }[] = [
   { id: 'tag', label: '쇼핑 태그 검사' },
   { id: 'rank', label: '순위 조회' },
   { id: 'batch', label: '일괄 처리' },
+  { id: 'shoppingTrend', label: '분야 트렌드' },
   { id: 'favorites', label: '즐겨찾기' },
 ];
 
@@ -351,6 +354,10 @@ export default function Home() {
         {tab === 'batch' && (
           <BatchOptimizer brands={ownBrands} blockedBrandsText={blockedBrandsText} />
         )}
+
+        {/* ─── 분야 트렌드 ──────────────────────────────── */}
+        {/* 검색창의 키워드와 무관하다 — 11개 쇼핑 분야 자체의 클릭 추이라 독립 조회다. */}
+        {tab === 'shoppingTrend' && <CategoryTrends />}
 
         {/* ─── 즐겨찾기 ─────────────────────────────────── */}
         {tab === 'favorites' && (

@@ -3,7 +3,8 @@ import { isPartialMonth, monthRange } from './date';
 import { getProvider, shoppingInsightUrl } from './openapi';
 import { mapLimit } from './metrics';
 import { withRetry } from './ratelimit';
-import type { AgeShare, CategoryCandidate, GenderSplit, TrendPoint } from './types';
+import { computeSeasonality } from './seasonality';
+import type { AgeShare, CategoryCandidate, CategoryTrendResult, GenderSplit, TrendPoint } from './types';
 
 const TTL = Number(process.env.KM_CACHE_TTL ?? 21600) * 1000;
 
@@ -208,4 +209,49 @@ export async function fetchShoppingTrend(
       partial: isPartialMonth(d.period),
     }));
   });
+}
+
+/**
+ * 분야 자체의 클릭 추이(키워드 무관) — "지금 이 분야가 뜨는지"를 보는 용도.
+ * `/category/keywords`(fetchShoppingTrend)와 달리 키워드를 넘기지 않고 분야 코드만 넘긴다.
+ *
+ * ⚠️ 카테고리를 하나씩 따로 호출한다 — 응답의 ratio는 "이 호출 안에서의 최댓값=100"
+ * 상댓값이라, 여러 분야를 한 요청에 묶지 않는 한 분야끼리 크기를 비교할 수 없다
+ * (inferCategories의 주석과 같은 제약). 그래서 이 함수의 결과는 분야 자기 자신의
+ * 시간 흐름(성수기·비수기, 최근 방향)만 본다 — "패션의류가 식품보다 크다" 같은
+ * 분야 간 비교에는 쓰지 않는다.
+ */
+export async function fetchCategoryTrend(code: string, name: string, months = 12): Promise<TrendPoint[]> {
+  const range = monthRange(months);
+  return cached(`categorytrend:${code}:${range.startDate}`, TTL, async () => {
+    const json = await post('/categories', {
+      ...range,
+      category: [{ name, param: [code] }],
+    });
+    return (json.results?.[0]?.data ?? []).map((d) => ({
+      period: d.period,
+      ratio: d.ratio,
+      partial: isPartialMonth(d.period),
+    }));
+  });
+}
+
+/** 11개 1depth 분야 전부의 최근 추이 + 시즌성 판정을 한 번에 가져온다. */
+export async function fetchAllCategoryTrends(months = 12): Promise<{
+  categories: CategoryTrendResult[];
+  warnings: string[];
+}> {
+  const warnings: string[] = [];
+
+  const results = await mapLimit(CATEGORIES, 4, async ({ code, name }) => {
+    try {
+      const trend = await fetchCategoryTrend(code, name, months);
+      return { code, name, trend, seasonality: computeSeasonality(trend) };
+    } catch (err) {
+      warnings.push(`${name}: ${err instanceof Error ? err.message : String(err)}`);
+      return { code, name, trend: [], seasonality: null };
+    }
+  });
+
+  return { categories: results, warnings };
 }

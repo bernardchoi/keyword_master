@@ -183,3 +183,17 @@ export interface RankResult {
   hits: RankHit[];
   demo: boolean;
 }
+
+export interface CategoryTrendResult {
+  code: string;
+  name: string;
+  /** 이 분야 자체의 최근 월별 클릭 지수(키워드 무관). 최고월=100 상댓값. */
+  trend: TrendPoint[];
+  /** 12개월 미만이면 null — 시즌성을 판정할 수 없다. */
+  seasonality: Seasonality | null;
+}
+
+export interface CategoryTrendsResponse {
+  categories: CategoryTrendResult[];
+  warnings: string[];
+}
