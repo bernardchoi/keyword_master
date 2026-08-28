@@ -161,17 +161,18 @@ export default function Home() {
         <section className="intro">
           <h1>네이버 키워드 검색량 · 경쟁강도 분석</h1>
           <p>{SITE_DESCRIPTION}</p>
-          <ul className="intro-features">
+          <ul className="feature-grid">
             {FEATURES.map((f) => (
-              <li key={f.name}>
-                <strong>{f.name}</strong> — {f.description}
+              <li className="feature-card" key={f.name}>
+                <span className="feature-icon" aria-hidden="true">
+                  {f.icon}
+                </span>
+                <strong>{f.name}</strong>
+                <p>{f.description}</p>
                 {'guideSlug' in f && (
-                  <>
-                    {' '}
-                    <Link href={`/guide/${f.guideSlug}`} className="intro-guidelink">
-                      계산 방식 보기 →
-                    </Link>
-                  </>
+                  <Link href={`/guide/${f.guideSlug}`} className="feature-link">
+                    계산 방식 보기 →
+                  </Link>
                 )}
               </li>
             ))}
