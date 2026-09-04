@@ -1,0 +1,200 @@
+:root {
+  color-scheme: light dark;
+  --bg: #ffffff;
+  --fg: #1a1a1a;
+  --muted: #6b7280;
+  --border: #e5e7eb;
+  --accent: #2563eb;
+  --accent-fg: #ffffff;
+  --row-hover: #f3f4f6;
+  --grade-best: #059669;
+  --grade-good: #16a34a;
+  --grade-mid: #ca8a04;
+  --grade-bad: #dc2626;
+  --grade-worst: #991b1b;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #18181b;
+    --fg: #f4f4f5;
+    --muted: #a1a1aa;
+    --border: #3f3f46;
+    --row-hover: #27272a;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  width: 420px;
+  margin: 0;
+  padding: 12px;
+  background: var(--bg);
+  color: var(--fg);
+  font: 13px/1.4 -apple-system, "Segoe UI", system-ui, sans-serif;
+}
+
+header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  margin-bottom: 10px;
+}
+
+h1 {
+  font-size: 15px;
+  margin: 0;
+}
+
+#open-full {
+  font-size: 11px;
+  color: var(--muted);
+  text-decoration: none;
+}
+#open-full:hover {
+  color: var(--accent);
+}
+
+#search-form {
+  display: flex;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+#keyword-input {
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg);
+  color: var(--fg);
+  font-size: 13px;
+}
+#keyword-input:focus {
+  outline: 2px solid var(--accent);
+  outline-offset: -1px;
+}
+
+button[type="submit"] {
+  padding: 7px 14px;
+  border: none;
+  border-radius: 6px;
+  background: var(--accent);
+  color: var(--accent-fg);
+  font-size: 13px;
+  cursor: pointer;
+}
+button[type="submit"]:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.history {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 8px;
+}
+.history:empty {
+  display: none;
+}
+.history button {
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--muted);
+  border-radius: 999px;
+  padding: 2px 9px;
+  font-size: 11px;
+  cursor: pointer;
+}
+.history button:hover {
+  color: var(--fg);
+  border-color: var(--accent);
+}
+
+.status {
+  color: var(--muted);
+  padding: 8px 2px;
+}
+.status.error {
+  color: var(--grade-bad);
+}
+
+.notice {
+  background: rgba(37, 99, 235, 0.08);
+  border: 1px solid rgba(37, 99, 235, 0.25);
+  border-radius: 6px;
+  padding: 6px 8px;
+  font-size: 11.5px;
+  color: var(--muted);
+  margin-bottom: 8px;
+}
+
+.meta {
+  display: flex;
+  justify-content: space-between;
+  color: var(--muted);
+  font-size: 11px;
+  margin-bottom: 4px;
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+th,
+td {
+  padding: 5px 4px;
+  text-align: right;
+  border-bottom: 1px solid var(--border);
+  white-space: nowrap;
+}
+
+th:nth-child(2),
+td:nth-child(2) {
+  text-align: left;
+}
+
+thead th {
+  color: var(--muted);
+  font-weight: 500;
+  font-size: 11px;
+}
+
+tbody tr:hover {
+  background: var(--row-hover);
+}
+
+tbody tr.seed {
+  background: rgba(37, 99, 235, 0.07);
+  font-weight: 600;
+}
+
+.grade {
+  font-weight: 600;
+}
+.grade-최고 {
+  color: var(--grade-best);
+}
+.grade-좋음 {
+  color: var(--grade-good);
+}
+.grade-보통 {
+  color: var(--grade-mid);
+}
+.grade-나쁨 {
+  color: var(--grade-bad);
+}
+.grade-최악 {
+  color: var(--grade-worst);
+}
+
+#result-wrap {
+  max-height: 380px;
+  overflow-y: auto;
+}

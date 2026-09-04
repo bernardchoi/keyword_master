@@ -1,0 +1,47 @@
+<!doctype html>
+<html lang="ko">
+  <head>
+    <meta charset="utf-8" />
+    <title>키워드 마스터</title>
+    <link rel="stylesheet" href="popup.css" />
+  </head>
+  <body>
+    <header>
+      <h1>키워드 마스터</h1>
+      <a id="open-full" href="https://keyword-master-delta.vercel.app" target="_blank" rel="noopener">전체 화면 열기 ↗</a>
+    </header>
+
+    <form id="search-form">
+      <input id="keyword-input" type="text" placeholder="키워드를 입력하세요" autocomplete="off" maxlength="40" />
+      <button type="submit">분석</button>
+    </form>
+
+    <div id="history" class="history"></div>
+
+    <div id="status" class="status" hidden></div>
+    <div id="notice" class="notice" hidden></div>
+
+    <div id="result-wrap" hidden>
+      <div class="meta">
+        <span id="meta-total"></span>
+        <span id="meta-took"></span>
+      </div>
+      <table id="result-table">
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>키워드</th>
+            <th>PC</th>
+            <th>모바일</th>
+            <th>합계</th>
+            <th>문서수</th>
+            <th>경쟁강도</th>
+          </tr>
+        </thead>
+        <tbody id="result-body"></tbody>
+      </table>
+    </div>
+
+    <script src="popup.js"></script>
+  </body>
+</html>
