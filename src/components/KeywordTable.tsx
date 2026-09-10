@@ -3,10 +3,11 @@
 import { useMemo, useState } from 'react';
 import type { KeywordRow } from '@/lib/types';
 import { compact, n, pct, ratio } from '@/lib/format';
+import type { OpportunityScore } from '@/lib/opportunity-score';
 
 type SortKey =
   | 'rank' | 'keyword' | 'pcSearches' | 'mobileSearches' | 'totalSearches'
-  | 'mobileShare' | 'blog' | 'comp' | 'adDepth';
+  | 'mobileShare' | 'blog' | 'comp' | 'adDepth' | 'opportunity';
 
 interface Column {
   key: SortKey;
@@ -20,6 +21,7 @@ interface Column {
 const COLUMNS: Column[] = [
   { key: 'rank', label: '#', mobileHide: true },
   { key: 'keyword', label: '키워드', align: 'left' },
+  { key: 'opportunity', label: '기회', title: '콘텐츠·수요 기회점수 (0~100점)' },
   { key: 'pcSearches', label: 'PC', title: 'PC 월간 검색수', mobileHide: true },
   { key: 'mobileSearches', label: '모바일', title: '모바일 월간 검색수', mobileHide: true },
   { key: 'totalSearches', label: '총 검색수', title: 'PC + 모바일' },
@@ -33,9 +35,10 @@ function cx(...parts: (string | false | undefined)[]): string | undefined {
   return parts.filter(Boolean).join(' ') || undefined;
 }
 
-function valueOf(row: KeywordRow, key: SortKey): number | string {
+function valueOf(row: KeywordRow, key: SortKey, scores?: ReadonlyMap<string, OpportunityScore>): number | string {
   switch (key) {
     case 'keyword': return row.keyword;
+    case 'opportunity': return scores?.get(row.keyword)?.score ?? -1;
     case 'blog': return row.docs?.blog ?? -1;
     case 'comp': return row.competition?.ratio ?? Number.MAX_SAFE_INTEGER;
     default: return row[key] as number;
@@ -46,23 +49,27 @@ interface Props {
   rows: KeywordRow[];
   isFavorite: (keyword: string) => boolean;
   onToggleFavorite: (row: KeywordRow) => void;
+  scores?: ReadonlyMap<string, OpportunityScore>;
+  comparedKeywords?: ReadonlySet<string>;
+  onToggleCompare?: (row: KeywordRow) => void;
 }
 
-export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Props) {
+export default function KeywordTable({ rows, isFavorite, onToggleFavorite, scores, comparedKeywords, onToggleCompare }: Props) {
   const [sort, setSort] = useState<{ key: SortKey; dir: 1 | -1 }>({ key: 'rank', dir: 1 });
+  const columns = scores ? COLUMNS : COLUMNS.filter((column) => column.key !== 'opportunity');
 
   const sorted = useMemo(() => {
     const copy = [...rows];
     copy.sort((a, b) => {
-      const av = valueOf(a, sort.key);
-      const bv = valueOf(b, sort.key);
+      const av = valueOf(a, sort.key, scores);
+      const bv = valueOf(b, sort.key, scores);
       if (typeof av === 'string' || typeof bv === 'string') {
         return String(av).localeCompare(String(bv), 'ko') * sort.dir;
       }
       return (av - bv) * sort.dir;
     });
     return copy;
-  }, [rows, sort]);
+  }, [rows, scores, sort]);
 
   const click = (key: SortKey) => {
     setSort((prev) =>
@@ -78,10 +85,15 @@ export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Pro
         <thead>
           <tr>
             <th aria-label="즐겨찾기" style={{ cursor: 'default', width: 44 }} />
-            {COLUMNS.map((c) => (
+            {onToggleCompare && <th aria-label="키워드 비교" style={{ cursor: 'default' }}>비교</th>}
+            {columns.map((c) => (
               <th
                 key={c.key}
-                className={cx(c.align === 'left' && 'left', c.mobileHide && 'col-lowpri')}
+                className={cx(
+                  c.align === 'left' && 'left',
+                  c.mobileHide && 'col-lowpri',
+                  scores && (c.key === 'blog' || c.key === 'comp') && 'col-workspace-detail',
+                )}
                 title={c.title}
                 onClick={() => click(c.key)}
               >
@@ -94,6 +106,8 @@ export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Pro
         <tbody>
           {sorted.map((row) => {
             const fav = isFavorite(row.keyword);
+            const compared = comparedKeywords?.has(row.keyword) ?? false;
+            const opportunity = scores?.get(row.keyword);
             return (
               <tr key={row.keyword} className={row.isSeed ? 'seed' : undefined}>
                 <td className="col-star">
@@ -107,6 +121,19 @@ export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Pro
                     {fav ? '★' : '☆'}
                   </button>
                 </td>
+                {onToggleCompare && (
+                  <td className="col-compare">
+                    <button
+                      type="button"
+                      className={`compare-toggle${compared ? ' on' : ''}`}
+                      onClick={() => onToggleCompare(row)}
+                      aria-pressed={compared}
+                      aria-label={`${row.keyword} 비교 ${compared ? '빼기' : '담기'}`}
+                    >
+                      {compared ? '담김' : '담기'}
+                    </button>
+                  </td>
+                )}
                 <td className="muted col-lowpri">{row.rank}</td>
                 <td className="left">
                   <span className="kwname">{row.keyword}</span>
@@ -119,6 +146,11 @@ export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Pro
                     </span>
                   )}
                 </td>
+                {scores && (
+                  <td title={opportunity ? `${opportunity.reasons.join(' · ')} · 신뢰도 ${opportunity.confidence}` : undefined}>
+                    {opportunity ? <><strong>{opportunity.score}</strong><span className={`confidence ${opportunity.confidence}`}>{opportunity.confidence}</span></> : <span className="muted">–</span>}
+                  </td>
+                )}
                 <td className="col-lowpri">{n(row.pcSearches)}</td>
                 <td className="col-lowpri">{n(row.mobileSearches)}</td>
                 {/* 마스킹된 값은 상한이므로 숫자를 단정하지 않고 `<` 로 적는다 */}
@@ -127,8 +159,9 @@ export default function KeywordTable({ rows, isFavorite, onToggleFavorite }: Pro
                   <strong>{n(row.totalSearches)}</strong>
                 </td>
                 <td className="muted col-lowpri">{pct(row.mobileShare, 0)}</td>
-                <td>{row.docs ? compact(row.docs.blog) : <span className="muted">–</span>}</td>
+                <td className={scores ? 'col-workspace-detail' : undefined}>{row.docs ? compact(row.docs.blog) : <span className="muted">–</span>}</td>
                 <td
+                  className={scores ? 'col-workspace-detail' : undefined}
                   title={
                     row.competition?.lowerBound
                       ? '검색수가 마스킹된 키워드라 분모가 상한값입니다. 실제 경쟁강도는 이보다 높고 등급도 더 나쁠 수 있습니다.'

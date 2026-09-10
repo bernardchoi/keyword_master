@@ -3,6 +3,7 @@ import type { BatchRowResult } from './batch';
 import type { NameAnalysis } from './product-name';
 import type { TagSuggestion } from './tag-suggest';
 import type { KeywordRow, TagCheckResult } from './types';
+import type { OpportunityScore } from './opportunity-score';
 
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM 을 붙여 CSV 를 만든다. */
 export function toCsv(headers: string[], rows: (string | number)[][]): string {
@@ -70,6 +71,34 @@ export function exportKeywordsCsv(keyword: string, rows: KeywordRow[]) {
 
 export function exportFavoritesCsv(rows: KeywordRow[]) {
   download(`키워드마스터_즐겨찾기_${localDateStamp()}.csv`, toCsv(HEADERS, rows.map(toRow)));
+}
+
+export function exportKeywordComparisonCsv(
+  rows: KeywordRow[],
+  scores: ReadonlyMap<string, OpportunityScore>,
+) {
+  const headers = [
+    '키워드', '기회점수', '점수 신뢰도', '수요 점수', '콘텐츠 경쟁 점수', '모바일 점수',
+    '총 검색수', '검색수 마스킹', '모바일 비중(%)', '블로그 문서수', '경쟁강도', '경쟁등급',
+  ];
+  const values = rows.map((row): (string | number)[] => {
+    const score = scores.get(row.keyword);
+    return [
+      row.keyword,
+      score?.score ?? '',
+      score?.confidence ?? '',
+      score?.demand ?? '',
+      score?.competition ?? '',
+      score?.mobile ?? '',
+      row.totalSearches,
+      row.masked ? 'Y (실제 검색수는 이 값 미만)' : '',
+      (row.mobileShare * 100).toFixed(1),
+      row.docs?.blog ?? '',
+      row.competition?.ratio.toFixed(3) ?? '',
+      row.competition?.grade ?? '',
+    ];
+  });
+  download(`키워드마스터_키워드비교_${localDateStamp()}.csv`, toCsv(headers, values));
 }
 
 /**

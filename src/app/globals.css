@@ -265,6 +265,8 @@ textarea.input { min-height: 96px; resize: vertical; line-height: 1.6; }
   border: 1px solid var(--border); background: var(--surface-2); color: var(--text-2);
 }
 .chip:hover { border-color: var(--accent); color: var(--text); }
+.recent-row { align-items: center; margin-top: 7px; }
+.chip-label { font-size: 11.5px; font-weight: 700; color: var(--text-3); margin-right: 2px; }
 
 /* ─── 요약 카드 ────────────────────────────────────────────── */
 .stats { display: grid; grid-template-columns: repeat(auto-fit, minmax(158px, 1fr)); gap: 12px; margin-bottom: 18px; }
@@ -414,6 +416,7 @@ table.kw tr.seed:hover { background: var(--accent-soft); }
   /* PC/모바일 분리값·순위·광고는 총검색수·문서수·경쟁강도만으로도 판단 가능한
      보조 지표라 좁은 화면에서는 숨겨 가로 스크롤을 없앤다. */
   table.kw .col-lowpri { display: none; }
+  table.kw .col-workspace-detail { display: none; }
   table.kw .kwname {
     display: inline-block; max-width: 66px; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap; vertical-align: middle;
@@ -427,3 +430,72 @@ table.kw tr.seed:hover { background: var(--accent-soft); }
 select.input { min-width: 130px; flex: none; }
 
 .footnote { font-size: 12px; color: var(--text-3); margin-top: 14px; line-height: 1.6; }
+
+/* ─── 키워드 후보 작업 공간 ──────────────────────────────── */
+.result-heading { margin-bottom: 12px; }
+.workspace {
+  margin-bottom: 12px;
+}
+.workspace-body { padding-top: 14px; }
+.workspace-count { font-size: 13px; color: var(--accent); font-variant-numeric: tabular-nums; }
+.filter-grid {
+  display: grid;
+  grid-template-columns: minmax(180px, 1.3fr) repeat(4, minmax(120px, 1fr));
+  gap: 10px;
+}
+.filter-grid .field > span { font-size: 12px; font-weight: 650; color: var(--text-2); }
+.filter-grid .input { width: 100%; min-width: 0; padding: 8px 10px; }
+.filter-options {
+  display: flex; gap: 16px; align-items: center; flex-wrap: wrap;
+  margin-top: 12px; font-size: 12.5px; color: var(--text-2);
+}
+.filter-options label { display: inline-flex; align-items: center; gap: 6px; cursor: pointer; }
+.filter-options input { accent-color: var(--accent); width: 15px; height: 15px; }
+.preset-row { display: flex; align-items: center; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
+.preset-item { display: inline-flex; align-items: center; }
+.preset-item .chip { border-radius: 999px 0 0 999px; }
+.preset-item:has(.preset-delete) .chip { padding-right: 6px; }
+.preset-delete {
+  min-width: 26px; height: 27px; padding: 0 7px; cursor: pointer;
+  border: 1px solid var(--border); border-left: 0; border-radius: 0 999px 999px 0;
+  background: var(--surface-2); color: var(--text-3);
+}
+.preset-delete:hover { color: var(--text); border-color: var(--accent); }
+.preset-save { display: inline-flex; gap: 6px; margin-left: auto; }
+.preset-save .input { width: 130px; min-width: 0; padding: 6px 9px; font-size: 12.5px; }
+.workspace-note { margin: 10px 0 0; }
+
+.confidence {
+  display: inline-block; margin-left: 5px; padding: 1px 5px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; background: var(--surface-2); color: var(--text-3);
+}
+.confidence.높음 { color: var(--g-good); }
+.confidence.보통 { color: var(--g-mid); }
+.confidence.낮음 { color: var(--g-worst); }
+.compare-toggle {
+  cursor: pointer; min-width: 42px; padding: 4px 7px; border-radius: 6px;
+  border: 1px solid var(--border); background: var(--surface); color: var(--text-2);
+  font-size: 11.5px; font-weight: 700;
+}
+.compare-toggle:hover { border-color: var(--accent); color: var(--text); }
+.compare-toggle.on { border-color: var(--accent); background: var(--accent-soft); color: var(--text); }
+.compare-card { margin-bottom: 12px; }
+.compare-chips { display: flex; gap: 6px; flex-wrap: wrap; padding: 12px 18px 0; }
+.compare-prompt { padding: 18px; color: var(--text-3); font-size: 13px; }
+.compare-table-wrap { max-height: 280px; margin-top: 10px; }
+.compare-table th { cursor: default; }
+.compare-table th:hover { color: var(--text-2); }
+
+@media (max-width: 880px) {
+  .filter-grid { grid-template-columns: repeat(2, minmax(140px, 1fr)); }
+}
+
+@media (max-width: 640px) {
+  .filter-grid { grid-template-columns: 1fr 1fr; }
+  .filter-grid .field:first-child { grid-column: 1 / -1; }
+  .preset-save { width: 100%; margin-left: 0; }
+  .preset-save .input { flex: 1; }
+  .workspace-note { display: none; }
+  table.kw .confidence { display: none; }
+  table.kw th[aria-label='키워드 비교'], table.kw td.col-compare { padding-left: 3px; padding-right: 3px; }
+}

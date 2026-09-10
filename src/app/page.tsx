@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import KeywordTable from '@/components/KeywordTable';
+import KeywordWorkspace from '@/components/KeywordWorkspace';
 import SummaryCards from '@/components/SummaryCards';
 import CategoryExplorer from '@/components/CategoryExplorer';
 import ProductNameOptimizer from '@/components/ProductNameOptimizer';
@@ -15,6 +16,7 @@ import BatchOptimizer from '@/components/BatchOptimizer';
 import { useFavorites } from '@/hooks/useFavorites';
 import { useLocalStorageText } from '@/hooks/useLocalStorageText';
 import { useAnalysisHistory } from '@/hooks/useAnalysisHistory';
+import { useRecentSearches } from '@/hooks/useRecentSearches';
 import { computeHistoryDiff, snapshotFromAnalysis, type HistoryDiffResult } from '@/lib/history';
 import Link from 'next/link';
 import { exportFavoritesCsv, exportKeywordsCsv } from '@/lib/export';
@@ -66,8 +68,11 @@ export default function Home() {
 
   const favorites = useFavorites();
   const history = useAnalysisHistory();
+  const recent = useRecentSearches();
   const historyRef = useRef(history);
+  const recentRef = useRef(recent);
   useEffect(() => { historyRef.current = history; }, [history]);
+  useEffect(() => { recentRef.current = recent; }, [recent]);
   const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -105,6 +110,7 @@ export default function Home() {
       if (!res.ok) throw new Error(json.error ?? '분석에 실패했습니다.');
       const result = json as AnalyzeResponse;
       setData(result);
+      recentRef.current.record(kw);
 
       // 실제 데이터일 때만 이력을 남긴다 — 데모 데이터는 키워드마다 결정적이라
       // 매번 "변화 없음"으로만 나와 진짜 추적처럼 보이면 오히려 오해를 산다.
@@ -244,6 +250,15 @@ export default function Home() {
                 </button>
               ))}
             </div>
+            {recent.list.length > 0 && (
+              <div className="chiprow recent-row">
+                <span className="chip-label">최근</span>
+                {recent.list.slice(0, 6).map((item) => (
+                  <button type="button" className="chip" key={item} onClick={() => pick(item)}>{item}</button>
+                ))}
+                <button type="button" className="btn sm ghost" onClick={recent.clear}>지우기</button>
+              </div>
+            )}
           </div>
         </div>
 
@@ -293,7 +308,7 @@ export default function Home() {
                 </div>
               )}
 
-              <div className="card">
+              <div className="card result-heading">
                 <div className="card-head">
                   <div>
                     <h2 className="card-title">연관 키워드 {data.rows.length}개</h2>
@@ -313,22 +328,12 @@ export default function Home() {
                   <span className="spacer" />
                   <span className="badge">{data.tookMs.toLocaleString('ko-KR')}ms</span>
                 </div>
-                <KeywordTable
-                  rows={data.rows}
-                  isFavorite={favorites.has}
-                  onToggleFavorite={favorites.toggle}
-                />
-                <div className="card-pad" style={{ paddingTop: 12 }}>
-                  <p className="footnote">
-                    <strong>경쟁강도</strong> = 블로그 발행 문서수 ÷ 월간 검색수. 1보다 작으면 검색량 대비
-                    문서가 적다는 뜻이라 상위 노출이 상대적으로 쉽습니다.
-                    <br />
-                    <strong>*</strong> 표시는 네이버가 검색수를 10 미만으로 마스킹한 키워드입니다. 검색수는
-                    실측치가 아니라 상한(<code>&lt;</code>)이고, 그 때문에 경쟁강도도 하한(<code>≥</code>)으로
-                    적습니다 — 실제 경쟁은 표시된 것보다 심할 수 있습니다.
-                  </p>
-                </div>
               </div>
+              <KeywordWorkspace
+                rows={data.rows}
+                isFavorite={favorites.has}
+                onToggleFavorite={favorites.toggle}
+              />
             </>
           ) : (
             <div className="empty">
