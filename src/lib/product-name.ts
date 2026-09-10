@@ -1,5 +1,4 @@
-import { withCustomBrandWords } from './brand-data';
-import { CHANNEL_WORDS, includesAny, PROMO_WORDS } from './tag-rules';
+import { CHANNEL_WORDS, includesAny, PROMO_WORDS, unownedBrand } from './tag-rules';
 import type { KeywordRow, TagCheckIssue } from './types';
 
 /**
@@ -154,9 +153,8 @@ const toCovered = (r: KeywordRow): CoveredKeyword => ({
 
 /** 상품명에 쓸 수 없는 말인지 — 홍보문구·판매처·타사 브랜드 */
 function blockedWord(token: string, ownBrands: string[], blockedBrands: string[]): string | null {
-  const own = ownBrands.map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(token, withCustomBrandWords(blockedBrands));
-  if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) return brand;
+  const brand = unownedBrand(token, ownBrands, blockedBrands);
+  if (brand) return brand;
   return includesAny(token, PROMO_WORDS) ?? includesAny(token, CHANNEL_WORDS);
 }
 
@@ -286,9 +284,8 @@ function checkName(
   const channel = includesAny(trimmed, CHANNEL_WORDS);
   if (channel) push('block', 'CHANNEL', `판매처·플랫폼명은 쓸 수 없습니다: "${channel}"`);
 
-  const own = ownBrands.map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(trimmed, withCustomBrandWords(blockedBrands));
-  if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) {
+  const brand = unownedBrand(trimmed, ownBrands, blockedBrands);
+  if (brand) {
     push(
       'block',
       'BRAND',

@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import { sameSnapshot, type HistorySnapshot } from '@/lib/history';
+import { isStoredHistory, parseStoredMap } from '@/lib/stored-data';
 
 const KEY = 'km:history:v1';
 /** 키워드 하나당 남기는 스냅샷 개수 */
@@ -15,7 +16,7 @@ function read(): Store {
   if (typeof window === 'undefined') return {};
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Store) : {};
+    return parseStoredMap(raw, isStoredHistory);
   } catch {
     return {};
   }
@@ -51,7 +52,7 @@ export function useAnalysisHistory() {
   /** 이번에 기록하기 '직전'의 마지막 스냅샷 — 비교 기준으로 쓴다 */
   const getPrevious = useCallback(
     (keyword: string): HistorySnapshot | null => {
-      const list = store[keyword];
+      const list = Object.hasOwn(store, keyword) ? store[keyword] : undefined;
       return list && list.length > 0 ? list[list.length - 1] : null;
     },
     [store],
@@ -59,7 +60,7 @@ export function useAnalysisHistory() {
 
   const record = useCallback((keyword: string, snapshot: HistorySnapshot) => {
     setStore((prev) => {
-      const list = prev[keyword] ?? [];
+      const list = Object.hasOwn(prev, keyword) ? prev[keyword] : [];
       const last = list[list.length - 1];
       // 직전과 완전히 같은 값이면 저장하지 않는다 — 같은 키워드를 연달아
       // 눌러도 의미 없는 항목만 늘어나는 걸 막는다.

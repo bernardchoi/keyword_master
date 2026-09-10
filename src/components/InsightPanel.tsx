@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react';
 import type { InsightResponse, TrendPoint } from '@/lib/types';
 import { MONTH_LABELS } from '@/lib/seasonality';
 import { compact, pct } from '@/lib/format';
+import { alignTrends } from '@/lib/trend-alignment';
 
 function DualTrend({ search, shopping }: { search: TrendPoint[]; shopping: TrendPoint[] }) {
   const W = 720;
@@ -21,8 +22,9 @@ function DualTrend({ search, shopping }: { search: TrendPoint[]; shopping: Trend
     return points.map((p, i) => `${i === 0 ? 'M' : 'L'}${x(i).toFixed(1)},${y(p.ratio).toFixed(1)}`).join(' ');
   };
 
-  const searchPath = line(search);
-  const shopPath = line(shopping);
+  const aligned = alignTrends(search, shopping);
+  const searchPath = line(aligned.search);
+  const shopPath = line(aligned.shopping);
   if (!searchPath && !shopPath) return null;
 
   return (
@@ -46,8 +48,8 @@ function DualTrend({ search, shopping }: { search: TrendPoint[]; shopping: Trend
       </div>
       <p className="footnote" style={{ marginTop: 4 }}>
         둘 다 각자의 최댓값을 100으로 한 상대 지수라 <strong>모양(방향)만 비교</strong>하세요.
-        통합검색은 느는데 쇼핑이 정체라면 구매 의도보다 정보 탐색이 늘어난 것입니다.
-        진행 중인 이번 달은 집계가 끝나지 않아 제외했습니다.
+        이 지수만으로 구매 의도나 실제 구매량의 변화를 확정할 수는 없습니다.
+        양쪽 데이터가 모두 있는 완료 월만 비교했습니다.
       </p>
     </div>
   );
@@ -166,7 +168,7 @@ export default function InsightPanel({ keyword }: { keyword: string | null }) {
                   {s.monthly.map((m) => (
                     <div className="monthcol" key={m.month} title={`${m.month}월 지수 ${m.index}`}>
                       <span
-                        className={`mbar${s.peakMonths.includes(m.month) ? ' peak' : ''}`}
+                        className={`mbar${s.level !== '없음' && s.peakMonths.includes(m.month) ? ' peak' : ''}`}
                         style={{ height: `${Math.max(m.index, 3)}%` }}
                       />
                       <span className="mlabel">{m.month}</span>
@@ -174,8 +176,10 @@ export default function InsightPanel({ keyword }: { keyword: string | null }) {
                   ))}
                 </div>
                 <div className="srow" style={{ marginTop: 14, gap: 8 }}>
-                  <span className="badge ok">성수기 {s.peakMonths.map((m) => `${m}월`).join('·')}</span>
-                  <span className="badge">비수기 {s.lowMonths.map((m) => `${m}월`).join('·')}</span>
+                  {s.level !== '없음' && <>
+                    <span className="badge ok">성수기 {s.peakMonths.map((m) => `${m}월`).join('·')}</span>
+                    <span className="badge">비수기 {s.lowMonths.map((m) => `${m}월`).join('·')}</span>
+                  </>}
                   <span className={`badge ${s.currentPhase === '성수기' ? 'ok' : ''}`}>
                     지금 {s.currentPhase}
                   </span>
@@ -208,7 +212,7 @@ export default function InsightPanel({ keyword }: { keyword: string | null }) {
         </div>
         <div className="card-pad">
           {data.shoppingTrend.length > 1 || data.searchTrend.length > 1 ? (
-            <DualTrend search={data.searchTrend.slice(-12)} shopping={data.shoppingTrend} />
+            <DualTrend search={data.searchTrend} shopping={data.shoppingTrend} />
           ) : (
             <p className="muted" style={{ fontSize: 13 }}>비교할 추이 데이터가 없습니다.</p>
           )}

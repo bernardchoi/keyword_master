@@ -18,7 +18,7 @@ import type { AnalyzeResponse } from './types';
  */
 
 /** analyzeName/suggestTags 가 실제로 쓰는 부분만 받는다 — 테스트에서 AnalyzeResponse 전체를 흉내 낼 필요가 없다 */
-export type KeywordData = Pick<AnalyzeResponse, 'rows' | 'keyword'>;
+export type KeywordData = Pick<AnalyzeResponse, 'rows' | 'keyword'> & Partial<Pick<AnalyzeResponse, 'demo' | 'notice'>>;
 
 export interface BatchRowResult extends BatchInputRow {
   status: 'ok' | 'error';
@@ -33,9 +33,10 @@ export function computeBatchRow(
   ownBrands: string[],
   blockedBrands: string[],
 ): BatchRowResult {
-  const kd = keywordData[row.keyword];
+  const kd = Object.hasOwn(keywordData, row.keyword) ? keywordData[row.keyword] : undefined;
   if (!kd) return { ...row, status: 'error', error: '이 키워드는 아직 분석되지 않았습니다.' };
   if ('error' in kd) return { ...row, status: 'error', error: kd.error };
+  if (kd.demo) return { ...row, status: 'error', error: '데모 데이터는 실제 상품 최적화 결과로 사용하지 않습니다. 검색광고 API를 설정해 주세요.' };
 
   // 이 상품에만 적용할 브랜드(CSV 3번째 칸)는 공용 화이트리스트에 더한다.
   const brands = [...ownBrands, ...row.brands];

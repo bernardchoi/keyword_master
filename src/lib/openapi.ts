@@ -133,6 +133,7 @@ async function search<T>(
     // 표에 `–` 로 남는다. 게이트를 통과시키고 429·5xx 는 재시도한다.
     const res = await withRetry(() =>
       fetch(url, {
+        signal: AbortSignal.timeout(10000),
         headers: headers(),
         cache: 'no-store',
       }),
@@ -259,6 +260,7 @@ export async function fetchTrend(
   return cached(key, TTL, async () => {
     const res = await withRetry(() =>
       fetch(trendUrl(), {
+        signal: AbortSignal.timeout(10000),
         method: 'POST',
         headers: headers({ 'Content-Type': 'application/json' }),
         body: JSON.stringify({

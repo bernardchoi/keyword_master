@@ -81,7 +81,7 @@ export default function BatchOptimizer({ brands, blockedBrandsText }: Props) {
     setRunning(true);
     setProgress({ done: 0, total: uniqueKeywords.length });
 
-    const map: Record<string, KeywordData | { error: string }> = {};
+    const map: Record<string, KeywordData | { error: string }> = Object.create(null);
     let done = 0;
     await mapLimit(uniqueKeywords, CONCURRENCY, async (kw) => {
       try {
@@ -92,7 +92,7 @@ export default function BatchOptimizer({ brands, blockedBrandsText }: Props) {
         });
         const json = (await res.json()) as AnalyzeResponse & { error?: string };
         if (!res.ok) throw new Error(json.error ?? '분석에 실패했습니다.');
-        map[kw] = { keyword: json.keyword, rows: json.rows };
+        map[kw] = { keyword: json.keyword, rows: json.rows, demo: json.demo, notice: json.notice };
       } catch (e) {
         map[kw] = { error: e instanceof Error ? e.message : '분석에 실패했습니다.' };
       } finally {

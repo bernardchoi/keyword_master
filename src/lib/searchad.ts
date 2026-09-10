@@ -121,6 +121,7 @@ export async function fetchKeywordTool(hints: string[]): Promise<KeywordMetric[]
     });
 
     const res = await fetch(`${BASE}${path}?${qs}`, {
+      signal: AbortSignal.timeout(10000),
       method: 'GET',
       headers: buildHeaders('GET', path),
       cache: 'no-store',

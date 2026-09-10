@@ -72,6 +72,9 @@ describe('computeSeasonality', () => {
 });
 
 describe('computeNewsPulse', () => {
+  it('오래된 기사 한 건은 현재 화제가 아니다', () => {
+    expect(computeNewsPulse(1, [{title:'old',link:'l',pubDate:'2025-01-01'}], Date.UTC(2026,0,1))!.level).toBe('조용함');
+  });
   it('기사가 하나도 없으면 조용함 · null 값들', () => {
     const result = computeNewsPulse(0, []);
     expect(result).toEqual({
@@ -92,12 +95,14 @@ describe('computeNewsPulse', () => {
     const hot = computeNewsPulse(
       1000,
       Array.from({ length: 60 }, (_, i) => ({ title: 't', link: 'l', pubDate: day(i / 60) })),
+      baseMs,
     );
     expect(hot!.level).toBe('매우 뜨거움'); // perDay >= 50
 
     const quiet = computeNewsPulse(
       1000,
       Array.from({ length: 3 }, (_, i) => ({ title: 't', link: 'l', pubDate: day(i * 10) })),
+      baseMs,
     );
     expect(quiet!.perDay).toBeLessThan(1);
     expect(quiet!.level).toBe('조용함');

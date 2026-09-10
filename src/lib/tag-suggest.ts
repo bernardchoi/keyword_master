@@ -1,5 +1,4 @@
-import { withCustomBrandWords } from './brand-data';
-import { CHANNEL_WORDS, includesAny, PROMO_WORDS } from './tag-rules';
+import { CHANNEL_WORDS, includesAny, PROMO_WORDS, unownedBrand } from './tag-rules';
 import { covers, detectHead, tokenize } from './product-name';
 import type { Grade, KeywordRow } from './types';
 
@@ -48,8 +47,9 @@ export interface TagCandidate {
   grade: Grade | null;
   /** 검색량 × 경쟁 가중치 */
   score: number;
-  /** 검색수가 마스킹돼 등급이 하한인 키워드 */
+  /** 마스킹 또는 경쟁강도 미조회로 추천 가중치가 불확실함 */
   uncertain: boolean;
+  masked: boolean;
 }
 
 export interface TagSuggestion {
@@ -65,9 +65,7 @@ export interface TagSuggestion {
 }
 
 function blocked(tag: string, ownBrands: string[], blockedBrands: string[]): boolean {
-  const own = ownBrands.map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(tag, withCustomBrandWords(blockedBrands));
-  if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) return true;
+  if (unownedBrand(tag, ownBrands, blockedBrands)) return true;
   return Boolean(includesAny(tag, PROMO_WORDS) ?? includesAny(tag, CHANNEL_WORDS));
 }
 
@@ -113,6 +111,7 @@ export function suggestTags(
       grade,
       score: Math.round(r.totalSearches * weight),
       uncertain,
+      masked: r.masked,
     });
   }
 

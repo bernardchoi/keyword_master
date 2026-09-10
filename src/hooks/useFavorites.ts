@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react';
 import type { KeywordRow } from '@/lib/types';
+import { isStoredRow, parseStoredMap } from '@/lib/stored-data';
 
 const KEY = 'km:favorites:v1';
 
@@ -9,7 +10,7 @@ function read(): Record<string, KeywordRow> {
   if (typeof window === 'undefined') return {};
   try {
     const raw = window.localStorage.getItem(KEY);
-    return raw ? (JSON.parse(raw) as Record<string, KeywordRow>) : {};
+    return parseStoredMap(raw, isStoredRow);
   } catch {
     return {};
   }
@@ -38,15 +39,15 @@ export function useFavorites() {
   const toggle = useCallback((row: KeywordRow) => {
     setMap((prev) => {
       const next = { ...prev };
-      if (next[row.keyword]) delete next[row.keyword];
-      else next[row.keyword] = row;
+      if (Object.hasOwn(next, row.keyword)) delete next[row.keyword];
+      else return { ...prev, [row.keyword]: row };
       return next;
     });
   }, []);
 
   const remove = useCallback((keyword: string) => {
     setMap((prev) => {
-      if (!prev[keyword]) return prev;
+      if (!Object.hasOwn(prev, keyword)) return prev;
       const next = { ...prev };
       delete next[keyword];
       return next;
@@ -55,7 +56,7 @@ export function useFavorites() {
 
   const clear = useCallback(() => setMap({}), []);
 
-  const has = useCallback((keyword: string) => Boolean(map[keyword]), [map]);
+  const has = useCallback((keyword: string) => Object.hasOwn(map, keyword), [map]);
 
   const list = Object.values(map).sort((a, b) => b.totalSearches - a.totalSearches);
 

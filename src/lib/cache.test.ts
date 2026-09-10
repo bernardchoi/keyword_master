@@ -8,6 +8,14 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
  * 충분하다.
  */
 describe('cached / cachedWithMeta (메모리 전용 경로)', () => {
+  it('동시에 들어온 동일 요청은 한 번만 계산하고 실패 후 재시도할 수 있다', async () => {
+    const { cached } = await import('./cache');
+    const fn = vi.fn(async () => { await new Promise(r=>setTimeout(r,5)); return 42; });
+    expect(await Promise.all([cached('flight',1000,fn),cached('flight',1000,fn)])).toEqual([42,42]);
+    expect(fn).toHaveBeenCalledTimes(1);
+    await expect(cached('retry',1000,async()=>{throw new Error('fail');})).rejects.toThrow('fail');
+    expect(await cached('retry',1000,async()=>42)).toBe(42);
+  });
   beforeEach(() => {
     vi.resetModules();
   });

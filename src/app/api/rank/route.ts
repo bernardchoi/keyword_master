@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { apiBudget } from '@/lib/api-budget';
+import { readJsonBody, textField, integerField, inputErrorResponse } from '@/lib/api-input';
 import { findRank, hasOpenApiCreds } from '@/lib/openapi';
 import { demoRank } from '@/lib/demo';
 import type { RankResult } from '@/lib/types';
@@ -12,14 +14,17 @@ const KINDS = { blog: 'blog', cafe: 'cafearticle' } as const;
 export async function POST(req: Request) {
   let body: { keyword?: string; target?: string; source?: keyof typeof KINDS; depth?: number };
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 });
+    body = await readJsonBody(req, {
+      keyword: textField(40), target: textField(2048), depth: integerField,
+      source: (v): v is keyof typeof KINDS => v === 'blog' || v === 'cafe',
+    });
+  } catch (error) {
+    return inputErrorResponse(error);
   }
 
   const keyword = (body.keyword ?? '').trim();
   const target = (body.target ?? '').trim();
-  const source = body.source && body.source in KINDS ? body.source : 'blog';
+  const source = body.source ?? 'blog';
   const depth = Math.min(Math.max(body.depth ?? 300, 100), 1000);
 
   if (!keyword) return NextResponse.json({ error: '키워드를 입력해 주세요.' }, { status: 400 });
@@ -31,6 +36,8 @@ export async function POST(req: Request) {
   }
 
   const demoMode = !hasOpenApiCreds();
+  const denied = await apiBudget(req, demoMode ? 1 : Math.ceil(depth / 100));
+  if (denied) return denied;
 
   let scanned: number;
   let hits: RankResult['hits'];

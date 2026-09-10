@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { apiBudget } from '@/lib/api-budget';
+import { readJsonBody, listField, inputErrorResponse } from '@/lib/api-input';
 import { hasOpenApiCreds } from '@/lib/openapi';
 import { CATEGORIES, inferCategories } from '@/lib/shopping-insight';
 import { mapLimit } from '@/lib/metrics';
@@ -19,9 +21,9 @@ export async function POST(req: Request) {
 
   let body: { keywords?: string[] };
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 });
+    body = await readJsonBody(req, { keywords: listField(MAX_KEYWORDS, 40) });
+  } catch (error) {
+    return inputErrorResponse(error);
   }
 
   if (!hasOpenApiCreds()) {
@@ -39,6 +41,8 @@ export async function POST(req: Request) {
   }
 
   const warnings: string[] = [];
+  const denied = await apiBudget(req, keywords.length * CATEGORIES.length);
+  if (denied) return denied;
 
   // inferCategories 자체가 내부에서 4개씩 병렬 호출하므로
   // 여기서는 2개씩만 돌려 초당 호출 상한(50 RPS)에 여유를 둔다.

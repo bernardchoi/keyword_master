@@ -151,7 +151,7 @@ npx vercel --prod
 ```
 src/
   app/
-    page.tsx              메인 화면 (탭 8개)
+    page.tsx              메인 화면 (탭 9개)
     layout.tsx, globals.css
     api/
       analyze/route.ts    검색량 + 연관 키워드 + 경쟁강도
@@ -434,7 +434,7 @@ API 호출은 1번입니다.
 
 Redis 호출이 실패하거나(네트워크 문제, 토큰 만료) 타임아웃(2초)에 걸려도
 요청은 죽지 않습니다. 읽기 실패는 직접 계산으로, 쓰기 실패는 "이번 응답은
-정상, 다음 요청부터 다시 캐시 미스"로 조용히 물러납니다.
+정상, 같은 인스턴스에서는 L1 사용"으로 물러납니다. 다만 공유 요청 제한기의 Redis 오류는 별개로 503을 반환합니다.
 
 붙이는 방법 — CLI 로 `npx vercel install upstash/upstash-kv` (마켓플레이스
 약관 동의가 필요해 최초 1회는 안내받는 URL을 브라우저에서 직접 열어야
@@ -457,56 +457,11 @@ production` 또는 아무 커밋이나 재푸시)해야 새 값이 반영됩니�
 
 ### 실제로 캐시가 도는지 확인하기
 
-환경변수가 채워져 있다고 캐시가 실제로 동작한다는 보장은 아닙니다 — 키
-이름 오타, 리전 문제, 타임아웃 등으로 조용히 L1(메모리)만 쓰는 채로
-남을 수 있습니다(실패해도 요청은 죽지 않게 설계했기 때문에, 겉보기엔
-정상 작동하는 것처럼 보입니다). 아래 두 단계로 눈으로 확인합니다.
+환경변수 설정 여부만으로 캐시 동작을 보장할 수는 없습니다. 캐시 읽기·쓰기 실패는 서버 로그에서 확인하고, 카테고리 분류 응답의 `cacheHits`로 적중 여부를 확인하세요.
 
-**1) 쓰기 확인** — 프로덕션 엔드포인트를 한 번 호출한 뒤, Redis에 직접
-접속해 키가 실제로 생겼는지 본다.
+Redis 캐시 키는 `km:cache:v2:` 접두어를 사용하며 값은 `{ value, expires }` 형식입니다. L1은 L2의 남은 수명만 승계합니다. 이전 형식 키는 읽지 않고 기존 만료 시간에 자연스럽게 사라집니다.
 
-```bash
-# 프로젝트가 vercel link 되어 있어야 한다
-npx vercel env pull kv-check.env --environment=production
-
-set -a; source kv-check.env; set +a
-curl -s "https://<production-url>/api/trend?keyword=여름원피스&months=12" > /dev/null
-
-curl -s -X POST "$KV_REST_API_URL" \
-  -H "Authorization: Bearer $KV_REST_API_TOKEN" \
-  -H "Content-Type: application/json" \
-  -d '["KEYS", "trend:*"]'
-# {"result":["trend:여름원피스:2025-08-01:2026-08-24"]} 처럼 키가 보이면 쓰기 성공
-```
-
-**2) 읽기 확인 (더 확실함)** — 앱이 한 번도 계산한 적 없는 키에 실제
-API로는 절대 나올 수 없는 가짜 값을 Redis에 직접 심어 두고, 같은
-파라미터로 엔드포인트를 호출했을 때 그 가짜 값이 그대로 돌아오면
-재계산 없이 Redis에서 읽었다는 확실한 증거다. 캐시 키 형식은
-`lib/openapi.ts`(`trend:${keyword}:${startDate}:${endDate}`)·
-`lib/searchad.ts`(`searchad:...`)·`lib/shopping-insight.ts`
-(`cat:`/`gender:`/`age:`/`shoptrend:` 등)에 있다.
-
-```bash
-# 실제 네이버 API로는 나올 수 없는 값(1999년, ratio 9999)을 직접 심는다
-curl -s -X POST "$KV_REST_API_URL" \
-  -H "Authorization: Bearer $KV_REST_API_TOKEN" -H "Content-Type: application/json" \
-  -d '["SET", "trend:캐시확인테스트:2025-08-01:2026-08-24",
-       "[{\"period\":\"1999-01\",\"ratio\":9999,\"partial\":false}]", "EX", "120"]'
-
-curl -s "https://<production-url>/api/trend?keyword=캐시확인테스트&months=12"
-# points 에 1999-01 / ratio 9999 가 그대로 나오면 읽기 성공
-
-# 정리 — 확인 후 지운다
-curl -s -X POST "$KV_REST_API_URL" \
-  -H "Authorization: Bearer $KV_REST_API_TOKEN" -H "Content-Type: application/json" \
-  -d '["DEL", "trend:캐시확인테스트:2025-08-01:2026-08-24"]'
-rm kv-check.env  # 인증정보 파일은 커밋하지 말고 바로 지운다
-```
-
-`startDate`(오늘 기준 n개월 전 1일)는 조회 시점에 따라 달라지므로,
-날짜가 바뀌었다면 `date.ts` 의 `monthsAgoStart` 로 다시 계산해서 키를
-맞춰야 한다.
+공유 TTL 승계와 만료는 `npm test -- src/lib/cache-shared.test.ts`, 동일 요청 합치기는 `npm test -- src/lib/cache.test.ts`로 검증할 수 있습니다. 운영 캐시에 가짜 데이터를 넣는 검증은 피하고, 실제 Redis 연동 시험은 분리된 개발 데이터베이스에서 수행하세요.
 
 ## 문제 해결
 
@@ -523,6 +478,11 @@ developers.naver.com 에서 사용 API 에 `검색`·`데이터랩`을 추가하
 `NAVER_AD_CUSTOMER_ID` 가 액세스라이선스를 발급받은 그 광고계정의 번호인지 확인하세요. 한 아이디에 광고계정이 여러 개면 번호가 각각 다릅니다.
 
 ## 알아 두어야 할 제약
+
+- **요청 제한**: 외부 호출 예상량 기준 10분당 사용자 3,000단위, 전체 10,000단위. `KM_CLIENT_BUDGET` / `KM_GLOBAL_BUDGET`으로 조정 가능하며 실제 공급자 쿼터 보장값은 아닙니다. 캐시 적중 요청도 보수적으로 차감합니다. 거절 시 429와 `Retry-After`를 반환합니다.
+- **공유 제한**: Redis 설정 시 원자적 카운터를 공유하고 장애 시 503으로 외부 호출을 중단합니다. 미설정 시 인스턴스별 메모리 제한만 제공하므로 공개 배포에서는 Redis 또는 별도의 방화벽 제한이 필요합니다. Vercel 외 배포는 기본적으로 사용자 예산도 공유합니다. 신뢰 프록시가 `X-Forwarded-For`를 정제하는 구성에서만 `KM_TRUST_PROXY=1`을 설정하세요. [Vercel 헤더 기준](https://vercel.com/docs/headers/request-headers).
+- **데이터 부재**: 검색광고 키가 없으면 키워드 분석은 명시적 데모입니다. 실제 검색수에 데모 문서수를 섞지 않으며 문서수 미조회는 빈 값으로 표시합니다. 태그 검사는 가짜 검색수를 만들지 않고, 일괄 최적화는 데모 데이터를 결과로 사용하지 않습니다.
+- **SEO URL 조회**: 공개 주소만 허용하며 검증한 IP에 연결합니다. DNS·리다이렉트를 포함한 조회 제한은 8초, 본문은 2MB입니다. 초과 응답은 잘린 결과 대신 실패로 처리합니다. 전체 HTML 표준 파서가 아닌 제한된 진단 파서이므로 브라우저의 실제 렌더링과 다를 수 있습니다.
 
 - **쇼핑 태그 등록 가능 여부**: 네이버는 이를 조회하는 공개 API를 제공하지 않습니다. 이 앱은 스마트스토어 상품등록 정책(길이·특수문자·홍보문구·판매처명·타사 상표)을 규칙으로 구현하고, 월간 검색수와 3년치 추이로 계산한 시즌성을 근거로 **추정**합니다. 등록 상품수·카테고리 집중도는 쇼핑 검색 API 가 없어 근거로 쓸 수 없습니다. 최종 확인은 스마트스토어 상품등록 화면에서 하세요.
 - **순위 조회**: 네이버 검색 오픈 API 결과 순서 기준이며 블로그·카페만 지원합니다(쇼핑 검색 API 없음). 통합검색 화면의 VIEW·스마트블록 노출 순위와는 다를 수 있습니다.

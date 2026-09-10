@@ -49,3 +49,9 @@ export async function kvGetRaw(key: string): Promise<string | null> {
 export async function kvSetRaw(key: string, value: string, ttlSeconds: number): Promise<void> {
   await command(['SET', key, value, 'EX', String(Math.max(1, Math.round(ttlSeconds)))]);
 }
+
+/** INCR와 만료를 원자적으로 적용한다. 앱 인스턴스 간에도 같은 예산을 공유한다. */
+export async function kvConsumeBudget(key: string, cost: number, limit: number, ttlSeconds: number): Promise<boolean> {
+  const script = "local n=tonumber(redis.call('GET',KEYS[1]) or '0'); if n+tonumber(ARGV[1])>tonumber(ARGV[2]) then return 0 end; redis.call('INCRBY',KEYS[1],ARGV[1]); redis.call('EXPIRE',KEYS[1],ARGV[3]); return 1";
+  return await command<number>(['EVAL', script, 1, key, cost, limit, ttlSeconds]) === 1;
+}

@@ -1,4 +1,6 @@
 import { NextResponse } from 'next/server';
+import { apiBudget } from '@/lib/api-budget';
+import { readJsonBody, textField, integerField, inputErrorResponse } from '@/lib/api-input';
 import { fetchKeywordTool, hasSearchAdCreds, SearchAdError } from '@/lib/searchad';
 import { fetchBlogTotal, hasOpenApiCreds } from '@/lib/openapi';
 import { computeCompetition, mapLimit } from '@/lib/metrics';
@@ -15,9 +17,9 @@ export async function POST(req: Request) {
 
   let body: { keyword?: string; limit?: number; enrich?: number };
   try {
-    body = await req.json();
-  } catch {
-    return NextResponse.json({ error: '잘못된 요청 형식입니다.' }, { status: 400 });
+    body = await readJsonBody(req, { keyword: textField(40), limit: integerField, enrich: integerField });
+  } catch (error) {
+    return inputErrorResponse(error);
   }
 
   const keyword = (body.keyword ?? '').trim();
@@ -33,13 +35,16 @@ export async function POST(req: Request) {
   // `–` 로 남았는데, 경쟁이 낮은 롱테일 키워드는 대개 그 아래쪽에 있어서
   // 정작 찾아야 할 키워드에 등급이 없었다.
   // 비용은 키워드당 검색 API 1회 — 100행이면 100회, 월 775,000회 쿼터에 여유가 있다.
+  const configuredEnrich = Number(process.env.KM_ENRICH_LIMIT ?? limit);
   const enrichLimit = Math.min(
-    Math.max(body.enrich ?? Number(process.env.KM_ENRICH_LIMIT ?? limit), 0),
+    Math.max(body.enrich ?? (Number.isSafeInteger(configuredEnrich) ? configuredEnrich : limit), 0),
     limit,
   );
 
   const demoMode = !hasSearchAdCreds();
   const canEnrich = hasOpenApiCreds();
+  const denied = await apiBudget(req, demoMode ? 1 : 1 + (canEnrich ? enrichLimit + 1 : 0));
+  if (denied) return denied;
 
   // ── 1. 월간 검색수 + 연관 키워드 ────────────────────────────
   let metrics: KeywordMetric[];
@@ -64,9 +69,11 @@ export async function POST(req: Request) {
 
   const sliced = metrics.slice(0, limit);
   const seedKey = keyword.replace(/\s+/g, '');
+  const seedIndex = metrics.findIndex((m) => m.keyword.replace(/\s+/g, '') === seedKey);
 
   // ── 2. 상위 N개에 블로그 문서수 붙이기 ──────────────────────
   const targets = sliced.slice(0, enrichLimit);
+  if (enrichLimit > 0 && seedIndex >= enrichLimit) targets.push(metrics[seedIndex]);
   const enrichErrors: string[] = [];
 
   // 동시 실행 20개. 초당 호출 한도는 `lib/ratelimit.ts` 의 공용 게이트가 이미
@@ -74,7 +81,8 @@ export async function POST(req: Request) {
   // 5로 두면 왕복 지연이 긴 환경에서 `100 ÷ 5 × 지연`이 그대로 대기 시간이 된다 —
   // 실측: Vercel 배포본에서 100행 20.0초, 같은 코드가 로컬에서는 4.8초였다.
   const enrichment = await mapLimit(targets, 20, async (m) => {
-    if (demoMode || !canEnrich) return demoDocs(m.keyword, m.totalSearches) as DocCounts | null;
+    if (demoMode) return demoDocs(m.keyword, m.totalSearches) as DocCounts | null;
+    if (!canEnrich) return null;
 
     try {
       return { blog: await fetchBlogTotal(m.keyword) } as DocCounts | null;
@@ -86,8 +94,9 @@ export async function POST(req: Request) {
     }
   });
 
-  const rows: KeywordRow[] = sliced.map((m, i) => {
-    const docs = i < enrichment.length ? enrichment[i] : null;
+  const docsByKeyword = new Map(targets.map((m, i) => [m.keyword, enrichment[i]]));
+  const makeRow = (m: KeywordMetric, i: number): KeywordRow => {
+    const docs = docsByKeyword.get(m.keyword) ?? null;
     return {
       ...m,
       rank: i + 1,
@@ -95,7 +104,8 @@ export async function POST(req: Request) {
       docs,
       competition: docs ? computeCompetition(m, docs) : null,
     };
-  });
+  };
+  const rows = sliced.map(makeRow);
 
   const enrichedOk = rows.filter((r) => r.docs !== null).length;
 
@@ -103,7 +113,7 @@ export async function POST(req: Request) {
   if (demoMode) {
     notice = '데모 데이터입니다. .env.local 에 네이버 검색광고 API 키를 넣으면 실제 데이터로 바뀝니다.';
   } else if (!canEnrich) {
-    notice = '네이버 오픈 API 키가 없어 문서수·경쟁강도는 데모 값입니다.';
+    notice = '네이버 오픈 API 키가 없어 문서수·경쟁강도를 조회하지 못했습니다. 검색수는 실제 데이터입니다.';
   } else if (enrichErrors.length > 0) {
     const first = enrichErrors[0];
     const hint = /401|403/.test(first)
@@ -116,7 +126,7 @@ export async function POST(req: Request) {
 
   const payload: AnalyzeResponse = {
     keyword,
-    seed: rows.find((r) => r.isSeed) ?? null,
+    seed: rows.find((r) => r.isSeed) ?? (seedIndex >= 0 ? makeRow(metrics[seedIndex], seedIndex) : null),
     rows,
     totalRelated: metrics.length,
     demo: demoMode,

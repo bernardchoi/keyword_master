@@ -18,9 +18,12 @@ const MIN_GAP_MS = 40;
 
 let gate: Promise<void> = Promise.resolve();
 let lastStart = 0;
+let queued = 0;
 
 /** 모든 API HUB 호출이 이 문을 지나 최소 간격을 두고 나간다. */
 export function schedule<T>(fn: () => Promise<T>): Promise<T> {
+  if (queued >= 500) return Promise.reject(new Error('외부 API 대기열이 가득 찼습니다. 잠시 후 다시 시도해 주세요.'));
+  queued++;
   const slot = gate.then(async () => {
     const wait = lastStart + MIN_GAP_MS - Date.now();
     if (wait > 0) await new Promise((r) => setTimeout(r, wait));
@@ -28,7 +31,7 @@ export function schedule<T>(fn: () => Promise<T>): Promise<T> {
   });
   // 앞 호출이 터져도 줄은 계속 서야 한다.
   gate = slot.catch(() => undefined);
-  return slot.then(fn);
+  return slot.finally(() => { queued--; }).then(fn);
 }
 
 const RETRY_DELAYS_MS = [400, 1200];

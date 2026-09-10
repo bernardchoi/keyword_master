@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import KeywordTable from '@/components/KeywordTable';
 import SummaryCards from '@/components/SummaryCards';
 import CategoryExplorer from '@/components/CategoryExplorer';
@@ -66,6 +66,9 @@ export default function Home() {
 
   const favorites = useFavorites();
   const history = useAnalysisHistory();
+  const historyRef = useRef(history);
+  useEffect(() => { historyRef.current = history; }, [history]);
+  const activeRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     fetch('/api/status')
@@ -80,8 +83,14 @@ export default function Home() {
       setError('키워드를 입력해 주세요.');
       return;
     }
+    activeRequest.current?.abort();
+    const controller = new AbortController();
+    activeRequest.current = controller;
     setLoading(true);
     setError(null);
+    setData(null);
+    setTrend([]);
+    setHistoryDiff(null);
     setTab('keywords');
 
     try {
@@ -89,8 +98,10 @@ export default function Home() {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: kw, limit: 100 }),
+        signal: controller.signal,
       });
       const json = await res.json();
+      if (controller.signal.aborted) return;
       if (!res.ok) throw new Error(json.error ?? '분석에 실패했습니다.');
       const result = json as AnalyzeResponse;
       setData(result);
@@ -100,9 +111,9 @@ export default function Home() {
       if (!result.demo) {
         const snapshot = snapshotFromAnalysis(result);
         if (snapshot) {
-          const previous = history.getPrevious(kw);
+          const previous = historyRef.current.getPrevious(kw);
           setHistoryDiff(previous ? computeHistoryDiff(previous, snapshot) : null);
-          history.record(kw, snapshot);
+          historyRef.current.record(kw, snapshot);
         } else {
           setHistoryDiff(null);
         }
@@ -110,17 +121,31 @@ export default function Home() {
         setHistoryDiff(null);
       }
 
-      fetch(`/api/trend?keyword=${encodeURIComponent(kw)}&months=12`)
+      fetch(`/api/trend?keyword=${encodeURIComponent(kw)}&months=12`, { signal: controller.signal })
         .then((r) => r.json())
-        .then((j) => setTrend(j.points ?? []))
-        .catch(() => setTrend([]));
+        .then((j) => { if (!controller.signal.aborted) setTrend(j.demo && !result.demo ? [] : (j.points ?? [])); })
+        .catch(() => { if (!controller.signal.aborted) setTrend([]); });
     } catch (e) {
+      if (controller.signal.aborted) return;
       setError(e instanceof Error ? e.message : '분석에 실패했습니다.');
       setData(null);
     } finally {
-      setLoading(false);
+      if (!controller.signal.aborted) setLoading(false);
     }
-  }, [history]);
+  }, []);
+
+  useEffect(() => {
+    const q = new URLSearchParams(window.location.search).get('q')?.trim();
+    // Strict Mode의 첫 효과 정리 전에 자동 요청이 시작되지 않도록 예약한다.
+    const timer = q && q.length <= 40 ? setTimeout(() => {
+      setKeyword(q);
+      void analyze(q);
+    }, 0) : undefined;
+    return () => {
+      clearTimeout(timer);
+      activeRequest.current?.abort();
+    };
+  }, [analyze]);
 
   const pick = useCallback(
     (k: string) => {
@@ -148,10 +173,10 @@ export default function Home() {
           {status && (
             <>
               <span className={`badge ${status.searchAd ? 'ok' : 'warn'}`}>
-                검색광고 API {status.searchAd ? '연결됨' : '미설정'}
+                검색광고 API {status.searchAd ? '설정됨' : '미설정'}
               </span>
               <span className={`badge ${status.openApi ? 'ok' : 'warn'}`}>
-                오픈 API {status.openApi ? '연결됨' : '미설정'}
+                오픈 API {status.openApi ? '설정됨' : '미설정'}
               </span>
             </>
           )}

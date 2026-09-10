@@ -67,6 +67,12 @@ export interface TagCheckInput {
   seasonality?: Seasonality | null;
 }
 
+export function unownedBrand(text: string, ownBrands: string[], blockedBrands: string[]): string | null {
+  const normalize = (v: string) => v.toLowerCase().replace(/\s+/g, '');
+  const own = new Set(ownBrands.map(normalize));
+  return includesAny(text, withCustomBrandWords(blockedBrands).filter(b => !own.has(normalize(b))));
+}
+
 export function checkShoppingTag(input: TagCheckInput): TagCheckResult {
   const normalized = normalizeTag(input.tag);
   const issues: TagCheckIssue[] = [];
@@ -109,9 +115,8 @@ export function checkShoppingTag(input: TagCheckInput): TagCheckResult {
   const channel = includesAny(normalized, CHANNEL_WORDS);
   if (channel) push('block', 'CHANNEL', `판매처·플랫폼명은 사용할 수 없습니다: "${channel}"`, 60);
 
-  const own = (input.ownBrands ?? []).map((b) => b.toLowerCase().replace(/\s+/g, ''));
-  const brand = includesAny(normalized, withCustomBrandWords(input.blockedBrands ?? []));
-  if (brand && !own.includes(brand.toLowerCase().replace(/\s+/g, ''))) {
+  const brand = unownedBrand(normalized, input.ownBrands ?? [], input.blockedBrands ?? []);
+  if (brand) {
     push(
       'block',
       'BRAND',

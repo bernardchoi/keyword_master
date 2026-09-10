@@ -1,4 +1,5 @@
 import { NextResponse } from 'next/server';
+import { apiBudget } from '@/lib/api-budget';
 import { fetchNewsItems, fetchTrend, hasOpenApiCreds } from '@/lib/openapi';
 import {
   fetchAgeSplit,
@@ -19,7 +20,7 @@ const DETAIL_MONTHS = 12;
 export async function GET(req: Request) {
   const { searchParams } = new URL(req.url);
   const keyword = (searchParams.get('keyword') ?? '').trim();
-  if (!keyword) {
+  if (!keyword || keyword.length > 40) {
     return NextResponse.json({ error: '키워드를 입력해 주세요.' }, { status: 400 });
   }
 
@@ -31,6 +32,8 @@ export async function GET(req: Request) {
   }
 
   const warnings: string[] = [];
+  const denied = await apiBudget(req, 20);
+  if (denied) return denied;
   const note = (label: string, err: unknown) => {
     warnings.push(`${label}: ${err instanceof Error ? err.message : String(err)}`);
   };

@@ -191,7 +191,7 @@ export default function TagChecker({
                             <span className="muted"> {c.tag.length}자</span>
                           </td>
                           <td>
-                            {c.uncertain && <span className="muted">&lt; </span>}
+                            {c.masked && <span className="muted">&lt; </span>}
                             {compact(c.totalSearches)}
                           </td>
                           <td>

@@ -32,7 +32,7 @@
     return null;
   }
 
-  const keyword = decodeExtra((extractKeyword() ?? '').trim()).trim();
+  let keyword = decodeExtra((extractKeyword() ?? '').trim()).trim();
   if (!keyword) return;
 
   const cache = new Map();
@@ -71,6 +71,7 @@
       box-shadow: 0 4px 14px rgba(0,0,0,.25); cursor: pointer; user-select: none;
     }
     .km-fab:hover { background: #1d4ed8; }
+    .km-fab[hidden] { display: none; }
     .km-fab.active { background: #1e40af; }
     .km-panel {
       all: initial;
@@ -81,6 +82,7 @@
       font: 13px/1.45 -apple-system, "Segoe UI", system-ui, sans-serif;
       padding: 12px;
     }
+    .km-panel[hidden] { display: none; }
     @media (prefers-color-scheme: dark) {
       .km-panel { background: #18181b; color: #f4f4f5; border-color: #3f3f46; }
     }
@@ -128,6 +130,15 @@
   root.appendChild(panel);
 
   let open = false;
+  // SPA 검색도 새 URL의 검색어를 따른다. 패널을 열기 전에는 API를 호출하지 않는다.
+  setInterval(() => {
+    const next = decodeExtra((extractKeyword() ?? '').trim()).trim();
+    if (next === keyword) return;
+    keyword = next;
+    toggleBtn.hidden = !keyword;
+    if (!keyword) { open = false; panel.hidden = true; toggleBtn.classList.remove('active'); }
+    else if (open) void loadData();
+  }, 1000);
   toggleBtn.addEventListener('click', () => {
     open = !open;
     panel.hidden = !open;
@@ -161,7 +172,9 @@
     panel.appendChild(el('div', { class: 'km-status km-error', text: message }));
   }
 
+  const pending = new Map();
   async function loadData() {
+    const requestedKeyword = keyword;
     if (cache.has(keyword)) {
       render(cache.get(keyword));
       return;
@@ -169,13 +182,16 @@
     renderLoading();
     let res;
     try {
-      res = await chrome.runtime.sendMessage({ type: 'KM_ANALYZE', keyword });
+      if (!pending.has(requestedKeyword)) pending.set(requestedKeyword, chrome.runtime.sendMessage({ type: 'KM_ANALYZE', keyword: requestedKeyword }));
+      res = await pending.get(requestedKeyword);
     } catch {
-      renderError('확장이 새로고침된 것 같습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
+      if (keyword === requestedKeyword) renderError('확장이 새로고침된 것 같습니다. 페이지를 새로고침한 뒤 다시 시도해 주세요.');
       return;
+    } finally {
+      pending.delete(requestedKeyword);
     }
-    cache.set(keyword, res);
-    render(res);
+    if (res?.analyze) cache.set(requestedKeyword, res);
+    if (keyword === requestedKeyword) render(res);
   }
 
   function statBox(label, value, gradeClass) {
@@ -243,7 +259,7 @@
     }
 
     const { analyze, trend } = res;
-    const seed = analyze.seed ?? analyze.rows[0] ?? null;
+    const seed = analyze.seed ?? null;
 
     if (analyze.notice) {
       panel.appendChild(el('div', { class: 'km-notice', text: analyze.notice }));
@@ -254,10 +270,12 @@
       const summary = el('div', { class: 'km-summary' }, [
         statBox('PC', fmt(seed.pcSearches)),
         statBox('모바일', fmt(seed.mobileSearches)),
-        statBox('합계', fmt(seed.totalSearches)),
+        statBox('합계', `${seed.masked ? '< ' : ''}${fmt(seed.totalSearches)}`),
         statBox('경쟁강도', grade ?? '–', grade ? `km-grade-${grade}` : undefined),
       ]);
       panel.appendChild(summary);
+    } else {
+      panel.appendChild(el('div', { class: 'km-notice', text: '입력한 키워드의 정확한 검색수는 제공되지 않았습니다.' }));
     }
 
     // 마지막 달이 진행 중(partial)이면 며칠치만 집계된 값이라 그대로 이으면
@@ -280,7 +298,7 @@
           el('div', { class: 'km-bar-row' }, [
             bar,
             el('span', { class: 'km-bar-label', text: r.keyword }),
-            el('span', { class: 'km-bar-value', text: fmt(r.totalSearches) }),
+            el('span', { class: 'km-bar-value', text: `${r.masked ? '< ' : ''}${fmt(r.totalSearches)}` }),
           ]),
         );
       }

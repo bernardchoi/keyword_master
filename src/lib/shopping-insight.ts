@@ -59,6 +59,7 @@ async function post(path: string, body: unknown): Promise<InsightResponse> {
 
   const res = await withRetry(() =>
     fetch(shoppingInsightUrl(path), {
+      signal: AbortSignal.timeout(10000),
       method: 'POST',
       headers,
       body: JSON.stringify(body),

@@ -5,10 +5,12 @@ import type { TagSuggestion } from './tag-suggest';
 import type { KeywordRow, TagCheckResult } from './types';
 
 /** 엑셀에서 한글이 깨지지 않도록 UTF-8 BOM 을 붙여 CSV 를 만든다. */
-function toCsv(headers: string[], rows: (string | number)[][]): string {
+export function toCsv(headers: string[], rows: (string | number)[][]): string {
   const esc = (v: string | number) => {
-    const s = String(v ?? '');
-    return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
+    let s = String(v ?? '');
+    // 텍스트 셀만 중화한다. 정상적인 음수 숫자는 숫자로 유지한다.
+    if (typeof v === 'string' && (/^[\s]*[=+@-]/.test(s) || /^[\t\r\n]/.test(s))) s = `'${s}`;
+    return /[",\r\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
   };
   const body = [headers, ...rows].map((r) => r.map(esc).join(',')).join('\r\n');
   return `﻿${body}`;
@@ -181,7 +183,7 @@ export function exportTagsCsv(
       c.score,
       '',
       '',
-      c.uncertain ? '검색수가 마스킹돼 등급이 하한입니다' : '',
+      c.masked ? '검색수가 마스킹돼 등급이 하한입니다' : c.uncertain ? '경쟁강도를 조회하지 못했습니다' : '',
     );
   }
 

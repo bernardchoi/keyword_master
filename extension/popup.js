@@ -12,6 +12,7 @@ const resultWrap = document.getElementById('result-wrap');
 const resultBody = document.getElementById('result-body');
 const metaTotal = document.getElementById('meta-total');
 const metaTook = document.getElementById('meta-took');
+let activeRequest;
 
 function fmt(value) {
   if (value === null || value === undefined || !Number.isFinite(value)) return '–';
@@ -39,7 +40,7 @@ function setNotice(text) {
 
 async function loadHistory() {
   const { [HISTORY_KEY]: history = [] } = await chrome.storage.local.get(HISTORY_KEY);
-  return history;
+  return Array.isArray(history) ? history.filter((k) => typeof k === 'string').slice(0, MAX_HISTORY) : [];
 }
 
 async function pushHistory(keyword) {
@@ -72,15 +73,18 @@ function renderRows(rows) {
     const grade = row.competition?.grade;
     const docs = row.docs?.blog;
 
-    tr.innerHTML = `
-      <td>${row.rank}</td>
-      <td>${row.keyword}${row.masked ? ' <10' : ''}</td>
-      <td>${fmt(row.pcSearches)}</td>
-      <td>${fmt(row.mobileSearches)}</td>
-      <td>${fmt(row.totalSearches)}</td>
-      <td>${fmt(docs)}</td>
-      <td class="grade grade-${grade ?? ''}">${grade ?? '–'}</td>
-    `;
+    const values = [row.rank, row.keyword, fmt(row.pcSearches), fmt(row.mobileSearches),
+      `${row.masked ? '< ' : ''}${fmt(row.totalSearches)}`, fmt(docs), grade ?? '–'];
+    for (const value of values) {
+      const td = document.createElement('td');
+      td.textContent = String(value);
+      tr.appendChild(td);
+    }
+    tr.lastElementChild.classList.add('grade');
+    if (['최고', '좋음', '보통', '나쁨', '최악'].includes(grade)) {
+      tr.lastElementChild.classList.add(`grade-${grade}`);
+    }
+    if (row.competition?.lowerBound) tr.lastElementChild.title = '검색수가 마스킹되어 실제 경쟁강도는 이 값 이상입니다.';
     resultBody.appendChild(tr);
   }
 }
@@ -88,6 +92,10 @@ function renderRows(rows) {
 async function runAnalysis(keywordRaw) {
   const keyword = keywordRaw.trim();
   if (!keyword) return;
+  activeRequest?.abort();
+  const controller = new AbortController();
+  activeRequest = controller;
+  const timeout = setTimeout(() => controller.abort(new Error('요청 시간이 초과되었습니다. 다시 시도해 주세요.')), 60000);
 
   input.value = keyword;
   resultWrap.hidden = true;
@@ -100,8 +108,10 @@ async function runAnalysis(keywordRaw) {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ keyword, limit: 50 }),
+      signal: controller.signal,
     });
     const data = await res.json();
+    if (activeRequest !== controller) return;
 
     if (!res.ok) {
       setStatus(data.error ?? '분석에 실패했습니다.', true);
@@ -117,9 +127,10 @@ async function runAnalysis(keywordRaw) {
 
     await pushHistory(keyword);
   } catch (err) {
-    setStatus(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.', true);
+    if (activeRequest === controller) setStatus(err instanceof Error ? err.message : '네트워크 오류가 발생했습니다.', true);
   } finally {
-    form.querySelector('button').disabled = false;
+    clearTimeout(timeout);
+    if (activeRequest === controller) form.querySelector('button').disabled = false;
   }
 }
 

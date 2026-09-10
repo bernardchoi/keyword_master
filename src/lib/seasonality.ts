@@ -93,10 +93,10 @@ interface NewsItem {
  * 전부 30일 안에 들어와 변별이 되지 않았다. 그래서 건수가 아니라
  * **최신 100건이 걸쳐 있는 기간**을 본다. 기간이 짧을수록 지금 화제라는 뜻이다.
  */
-export function computeNewsPulse(total: number, items: NewsItem[]): NewsPulse | null {
+export function computeNewsPulse(total: number, items: NewsItem[], asOf = Date.now()): NewsPulse | null {
   const dates = items
     .map((it) => new Date(it.pubDate).getTime())
-    .filter((t) => Number.isFinite(t))
+    .filter((t) => Number.isFinite(t) && t <= asOf)
     .sort((a, b) => b - a);
 
   if (dates.length === 0) {
@@ -105,7 +105,8 @@ export function computeNewsPulse(total: number, items: NewsItem[]): NewsPulse | 
 
   const newest = dates[0];
   const oldest = dates[dates.length - 1];
-  const spanDays = Math.max((newest - oldest) / 864e5, 0.04); // 최소 1시간
+  // 최신 기사 이후의 공백도 포함. 오래된 기사 한 건을 현재 화제로 부풀리지 않는다.
+  const spanDays = Math.max((asOf - oldest) / 864e5, 1);
   const perDay = dates.length / spanDays;
 
   const level: NewsPulse['level'] =

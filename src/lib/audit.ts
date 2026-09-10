@@ -22,6 +22,7 @@ export interface FetchOutcome {
   status?: number;
   text?: string;
   reason?: string;
+  finalUrl?: string;
 }
 
 export interface AuditInput {
@@ -58,65 +59,109 @@ export function decodeEntities(s: string): string {
   return s.replace(/&(#?\w+);/g, (m, code: string) => ENTITY_MAP[code] ?? m);
 }
 
+/** 단방향 토크나이저. 닫는 태그가 없는 반복 입력을 매 시작점에서 다시 탐색하지 않는다. */
+function* htmlTags(html: string) {
+  let cursor = 0;
+  while (cursor < html.length) {
+    const start = html.indexOf('<', cursor);
+    if (start < 0) return;
+    let end = start + 1;
+    let quote = '';
+    for (; end < html.length; end++) {
+      const c = html[end];
+      if (quote) { if (c === quote) quote = ''; }
+      else if (c === '"' || c === "'") quote = c;
+      else if (c === '>') break;
+    }
+    if (end === html.length) return;
+    const raw = html.slice(start, end + 1);
+    const match = /^<\/?([a-z][a-z0-9:-]*)\b/i.exec(raw);
+    yield { start, end: end + 1, raw, name: match?.[1].toLowerCase() ?? '', closing: raw[1] === '/' };
+    cursor = end + 1;
+  }
+}
+
+function attribute(tag: string, name: string): string | null {
+  const fields = /([^\s=<>/"']+)\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>]+))/g;
+  for (const match of tag.matchAll(fields)) {
+    if (match[1].toLowerCase() === name) return decodeEntities(match[2] ?? match[3] ?? match[4]).trim();
+  }
+  return null;
+}
+
 function stripTags(html: string): string {
-  return decodeEntities(html.replace(/<[^>]+>/g, ' ')).replace(/\s+/g, ' ').trim();
+  const parts: string[] = [];
+  let cursor = 0;
+  for (const tag of htmlTags(html)) { parts.push(html.slice(cursor, tag.start)); cursor = tag.end; }
+  parts.push(html.slice(cursor));
+  return decodeEntities(parts.join(' ')).replace(/\s+/g, ' ').trim();
+}
+
+function* elements(html: string, name: string) {
+  let opening: ReturnType<typeof htmlTags> extends Generator<infer T> ? T : never;
+  let inside = false;
+  for (const tag of htmlTags(html)) {
+    if (tag.name !== name) continue;
+    if (!tag.closing && !inside) { opening = tag; inside = true; }
+    else if (tag.closing && inside) {
+      yield { raw: opening!.raw, text: html.slice(opening!.end, tag.start) };
+      inside = false;
+    }
+  }
 }
 
 export function extractTitle(html: string): string | null {
-  const m = html.match(/<title[^>]*>([\s\S]*?)<\/title>/i);
-  return m ? stripTags(m[1]) || null : null;
+  const first = elements(html, 'title').next();
+  return first.done ? null : stripTags(first.value.text) || null;
 }
 
 export function extractMetaContent(html: string, name: string): string | null {
-  const escaped = name.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  const nameFirst = new RegExp(
-    `<meta[^>]+name=["']${escaped}["'][^>]*content=["']([^"']*)["']`,
-    'i',
-  );
-  const contentFirst = new RegExp(
-    `<meta[^>]+content=["']([^"']*)["'][^>]+name=["']${escaped}["']`,
-    'i',
-  );
-  const m = html.match(nameFirst) ?? html.match(contentFirst);
-  return m ? decodeEntities(m[1]).trim() || null : null;
+  for (const tag of htmlTags(html)) {
+    if (!tag.closing && tag.name === 'meta' && attribute(tag.raw, 'name')?.toLowerCase() === name.toLowerCase()) {
+      return attribute(tag.raw, 'content') || null;
+    }
+  }
+  return null;
 }
 
 export function extractH1Texts(html: string): string[] {
-  const matches = [...html.matchAll(/<h1[^>]*>([\s\S]*?)<\/h1>/gi)];
-  return matches.map((m) => stripTags(m[1])).filter((t) => t.length > 0);
+  return [...elements(html, 'h1')].map((el) => stripTags(el.text)).filter(Boolean);
 }
 
 export function extractCanonical(html: string): string | null {
-  const hrefFirst = html.match(/<link[^>]+rel=["']canonical["'][^>]*href=["']([^"']*)["']/i);
-  const relFirst = html.match(/<link[^>]+href=["']([^"']*)["'][^>]+rel=["']canonical["']/i);
-  const m = hrefFirst ?? relFirst;
-  return m ? m[1].trim() || null : null;
-}
-
-/** JSON-LD <script> 블록을 찾아 파싱 가능한 것만 반환한다. */
-export function extractJsonLd(html: string): { found: number; parsed: unknown[] } {
-  const blocks = [
-    ...html.matchAll(/<script[^>]+type=["']application\/ld\+json["'][^>]*>([\s\S]*?)<\/script>/gi),
-  ];
-  const parsed: unknown[] = [];
-  for (const b of blocks) {
-    try {
-      parsed.push(JSON.parse(b[1]));
-    } catch {
-      // 문법 오류 — 카운트만 하고 값은 버린다
+  for (const tag of htmlTags(html)) {
+    if (!tag.closing && tag.name === 'link' && attribute(tag.raw, 'rel')?.toLowerCase().split(/\s+/).includes('canonical')) {
+      return attribute(tag.raw, 'href') || null;
     }
   }
-  return { found: blocks.length, parsed };
+  return null;
 }
 
-/** <body> 안에서 script/style을 뺀 실제 읽히는 텍스트 분량 — CSR/SSR 감지용. */
+export function extractJsonLd(html: string): { found: number; parsed: unknown[] } {
+  let found = 0;
+  const parsed: unknown[] = [];
+  for (const block of elements(html, 'script')) {
+    if (attribute(block.raw, 'type')?.toLowerCase() !== 'application/ld+json') continue;
+    found++;
+    try { parsed.push(JSON.parse(block.text)); } catch { /* 문법 오류는 found에만 반영 */ }
+  }
+  return { found, parsed };
+}
+
 export function extractBodyText(html: string): string {
-  const bodyMatch = html.match(/<body[^>]*>([\s\S]*)<\/body>/i);
-  const body = bodyMatch ? bodyMatch[1] : html;
-  const cleaned = body
-    .replace(/<script[\s\S]*?<\/script>/gi, ' ')
-    .replace(/<style[\s\S]*?<\/style>/gi, ' ');
-  return stripTags(cleaned);
+  const first = elements(html, 'body').next();
+  const body = first.done ? html : first.value.text;
+  const parts: string[] = [];
+  let cursor = 0;
+  let hidden = '';
+  for (const tag of htmlTags(body)) {
+    if (!hidden) parts.push(body.slice(cursor, tag.start));
+    if (!tag.closing && ['script', 'style'].includes(tag.name) && !hidden) hidden = tag.name;
+    else if (tag.closing && tag.name === hidden) hidden = '';
+    cursor = tag.end;
+  }
+  if (!hidden) parts.push(body.slice(cursor));
+  return decodeEntities(parts.join(' ')).replace(/\s+/g, ' ').trim();
 }
 
 // ─── robots.txt 파싱 ────────────────────────────────────────────────────────
@@ -128,9 +173,10 @@ export interface RobotsRules {
 }
 
 export function parseRobots(text: string): RobotsRules {
-  const groups: RobotsRules['groups'] = {};
+  const groups: RobotsRules['groups'] = Object.create(null);
   const sitemapRefs: string[] = [];
   let current: string[] = [];
+  let hasRules = false;
 
   for (const rawLine of text.split(/\r?\n/)) {
     const line = rawLine.split('#')[0].trim();
@@ -142,8 +188,11 @@ export function parseRobots(text: string): RobotsRules {
 
     if (key === 'user-agent') {
       const ua = value.toLowerCase();
+      if (!ua) continue;
+      if (hasRules) current = [];
       if (!groups[ua]) groups[ua] = { allow: [], disallow: [] };
-      current = [ua];
+      current.push(ua);
+      hasRules = false;
       continue;
     }
     if (key === 'sitemap') {
@@ -151,6 +200,7 @@ export function parseRobots(text: string): RobotsRules {
       continue;
     }
     if ((key === 'allow' || key === 'disallow') && current.length > 0) {
+      hasRules = true;
       for (const ua of current) groups[ua][key].push(value);
     }
   }
@@ -161,16 +211,31 @@ export function parseRobots(text: string): RobotsRules {
  * 특정 봇에 대한 허용 여부를 판단한다. 해당 봇 전용 규칙이 없으면 '*' 규칙으로 대체한다(표준 동작).
  * 규칙이 전혀 없으면 null(=암묵적 허용, 명시 정책 없음)을 돌려준다.
  */
-export function robotsAllows(rules: RobotsRules, botLower: string): boolean | null {
-  const group = rules.groups[botLower] ?? rules.groups['*'];
+export function robotsAllows(rules: RobotsRules, botLower: string, path = '/'): boolean | null {
+  const group = rules.groups[botLower.toLowerCase()] ?? rules.groups['*'];
   if (!group) return null;
-  const disallowsRoot = group.disallow.some((p) => p === '/' || p === '');
-  if (disallowsRoot) {
-    // Allow: / 가 더 구체적으로 덮어쓰는 흔한 패턴까지는 본다
-    const allowsRoot = group.allow.some((p) => p === '/' || p === '');
-    return allowsRoot;
+  let best = -1;
+  let allowed = true;
+  for (const kind of ['disallow', 'allow'] as const) {
+    for (const rule of group[kind]) {
+      if (!rule) continue;
+      const anchored = rule.endsWith('$');
+      const parts = (anchored ? rule.slice(0, -1) : rule).split('*');
+      if (!path.startsWith(parts[0])) continue;
+      let pos = parts[0].length;
+      let matches = true;
+      for (let i = 1; i < parts.length; i++) {
+        const last = anchored && i === parts.length - 1;
+        const at = last ? path.length - parts[i].length : path.indexOf(parts[i], pos);
+        if (at < pos || (last && !path.endsWith(parts[i]))) { matches = false; break; }
+        pos = at + parts[i].length;
+      }
+      if (anchored && pos !== path.length) matches = false;
+      const specificity = parts.join('').length;
+      if (matches && specificity >= best) { best = specificity; allowed = kind === 'allow'; }
+    }
   }
-  return true;
+  return allowed;
 }
 
 export function countSitemapLocs(xml: string): number {
@@ -188,13 +253,13 @@ const AI_BOTS = ['gptbot', 'oai-searchbot', 'perplexitybot', 'claudebot'];
 export function gradeSeo(input: AuditInput): AuditCheck[] {
   const results: AuditCheck[] = [];
 
-  if (!input.page.fetched || !input.page.text) {
+  if (!input.page.fetched || !input.page.text || (input.page.status !== undefined && (input.page.status < 200 || input.page.status >= 300))) {
     return [
       check(
         'fetch',
         '페이지 접근',
         'fail',
-        `대상 URL을 가져오지 못했습니다 (${input.page.reason ?? '알 수 없는 오류'}). 아래 항목은 판정할 수 없습니다.`,
+        `대상 URL을 가져오지 못했습니다 (${input.page.reason ?? `HTTP ${input.page.status ?? '알 수 없음'}`}). 아래 항목은 판정할 수 없습니다.`,
       ),
     ];
   }
@@ -278,22 +343,23 @@ export function gradeSeo(input: AuditInput): AuditCheck[] {
   );
 
   // 6. robots.txt
-  if (!input.robots.fetched || !input.robots.text) {
+  if (!input.robots.fetched || !input.robots.text || input.robots.status !== 200) {
     results.push(
       check('robots', 'robots.txt', 'warn', 'robots.txt가 없습니다. 기본값은 전체 허용이지만 명시적 정책이 없습니다.'),
     );
   } else {
     const rules = parseRobots(input.robots.text);
-    const allowed = robotsAllows(rules, '*');
+    const target = new URL(input.pageUrl);
+    const allowed = robotsAllows(rules, '*', target.pathname + target.search);
     results.push(
       allowed === false
-        ? check('robots', 'robots.txt', 'fail', 'robots.txt가 전체 크롤링을 차단하고 있습니다(Disallow: /).')
+        ? check('robots', 'robots.txt', 'fail', 'robots.txt가 진단 대상 경로의 크롤링을 차단하고 있습니다.')
         : check('robots', 'robots.txt', 'pass', 'robots.txt가 존재하고 크롤링을 차단하지 않습니다.'),
     );
   }
 
   // 7. sitemap.xml
-  if (!input.sitemap.fetched || !input.sitemap.text) {
+  if (!input.sitemap.fetched || !input.sitemap.text || input.sitemap.status !== 200) {
     results.push(check('sitemap', 'sitemap.xml', 'fail', 'sitemap.xml에 접근할 수 없습니다(404 등).'));
   } else {
     const count = countSitemapLocs(input.sitemap.text);
@@ -353,7 +419,7 @@ export function gradeGeo(input: AuditInput): AuditCheck[] {
   }
 
   // 2. AI 크롤러 허용
-  if (!input.robots.fetched || !input.robots.text) {
+  if (!input.robots.fetched || !input.robots.text || input.robots.status !== 200) {
     results.push(
       check(
         'ai-crawlers',
@@ -365,7 +431,8 @@ export function gradeGeo(input: AuditInput): AuditCheck[] {
   } else {
     const rules = parseRobots(input.robots.text);
     const explicit = AI_BOTS.filter((b) => b in rules.groups);
-    const blocked = AI_BOTS.filter((b) => robotsAllows(rules, b) === false);
+    const target = new URL(input.pageUrl);
+    const blocked = AI_BOTS.filter((b) => robotsAllows(rules, b, target.pathname + target.search) === false);
 
     if (blocked.length > 0) {
       results.push(

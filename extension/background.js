@@ -36,11 +36,12 @@ chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   (async () => {
     const [analyzeRes, trendRes] = await Promise.allSettled([
       fetch(`${API_BASE}/api/analyze`, {
+        signal: AbortSignal.timeout(60000),
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ keyword: msg.keyword, limit: 30 }),
       }).then(async (r) => ({ ok: r.ok, body: await r.json() })),
-      fetch(`${API_BASE}/api/trend?keyword=${encodeURIComponent(msg.keyword)}&months=12`).then(
+      fetch(`${API_BASE}/api/trend?keyword=${encodeURIComponent(msg.keyword)}&months=12`, { signal: AbortSignal.timeout(15000) }).then(
         (r) => r.json(),
       ),
     ]);

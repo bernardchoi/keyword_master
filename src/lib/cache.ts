@@ -18,6 +18,7 @@ import { kvEnabled, kvGetRaw, kvSetRaw } from './kv';
 type Entry<T> = { value: T; expires: number };
 
 const store = new Map<string, Entry<unknown>>();
+const inFlight = new Map<string, Promise<CachedResult<unknown>>>();
 
 const DEFAULT_TTL = Number(process.env.KM_CACHE_TTL ?? 21600) * 1000;
 const MAX_ENTRIES = 5000;
@@ -25,7 +26,7 @@ const MAX_ENTRIES = 5000;
 export function cacheGet<T>(key: string): T | undefined {
   const hit = store.get(key);
   if (!hit) return undefined;
-  if (hit.expires < Date.now()) {
+  if (hit.expires <= Date.now()) {
     store.delete(key);
     return undefined;
   }
@@ -60,7 +61,7 @@ export interface CachedResult<T> {
  * `cached()` 를 그대로 쓰고, 캐시 여부를 화면까지 보여 줘야 하는
  * 소수의 호출부만 이 함수를 쓴다.
  */
-export async function cachedWithMeta<T>(
+async function loadCachedWithMeta<T>(
   key: string,
   ttlMs: number,
   fn: () => Promise<T>,
@@ -70,12 +71,15 @@ export async function cachedWithMeta<T>(
 
   if (kvEnabled) {
     try {
-      const raw = await kvGetRaw(key);
+      const raw = await kvGetRaw(`km:cache:v2:${key}`);
       if (raw !== null) {
-        const value = JSON.parse(raw) as T;
-        // 다음 조회는 이 인스턴스가 살아 있는 동안 왕복 없이 메모리로 바로 응답한다.
-        cacheSet(key, value, ttlMs);
-        return { value, hit: true };
+        const entry = JSON.parse(raw) as { value: T; expires: number };
+        const remaining = entry?.expires - Date.now();
+        if (Number.isFinite(remaining) && remaining > 0 && Object.hasOwn(entry, 'value')) {
+          // L2의 남은 수명만 승계한다. 전체 TTL을 재부여하면 오래된 값을 신선하게 오인한다.
+          cacheSet(key, entry.value, Math.min(ttlMs, remaining));
+          return { value: entry.value, hit: true };
+        }
       }
     } catch (err) {
       // Redis 가 잠깐 죽어도 앱까지 죽으면 안 된다 — 직접 계산으로 조용히 물러난다.
@@ -88,7 +92,7 @@ export async function cachedWithMeta<T>(
 
   if (kvEnabled) {
     try {
-      await kvSetRaw(key, JSON.stringify(value), Math.ceil(ttlMs / 1000));
+      await kvSetRaw(`km:cache:v2:${key}`, JSON.stringify({value,expires:Date.now()+ttlMs}), Math.ceil(ttlMs / 1000));
     } catch (err) {
       // 메모리 캐시는 이미 채워졌으니 이번 요청 응답에는 영향 없다.
       console.warn('[cache] KV 쓰기 실패 (메모리 캐시는 정상 동작):', err);
@@ -96,6 +100,15 @@ export async function cachedWithMeta<T>(
   }
 
   return { value, hit: false };
+}
+
+export async function cachedWithMeta<T>(key: string, ttlMs: number, fn: () => Promise<T>): Promise<CachedResult<T>> {
+  const pending = inFlight.get(key);
+  if (pending) return { value: (await pending).value as T, hit: true };
+  const task = loadCachedWithMeta(key, ttlMs, fn);
+  inFlight.set(key, task);
+  try { return await task; }
+  finally { inFlight.delete(key); }
 }
 
 export async function cached<T>(
