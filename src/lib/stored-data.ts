@@ -7,6 +7,7 @@ const grade = (v: unknown) => v === null || ['최고','좋음','보통','나쁨'
 
 export function isStoredRow(v: unknown): v is KeywordRow {
   return object(v) && typeof v.keyword === 'string' && typeof v.masked === 'boolean' && typeof v.isSeed === 'boolean' &&
+    (v.pcMasked === undefined || typeof v.pcMasked === 'boolean') && (v.mobileMasked === undefined || typeof v.mobileMasked === 'boolean') &&
     numbers(v,['rank','pcSearches','mobileSearches','totalSearches','mobileShare','pcClicks','mobileClicks','pcCtr','mobileCtr','adDepth']) &&
     typeof v.compIdx === 'string' && (v.docs === null || (object(v.docs) && numbers(v.docs,['blog']))) &&
     (v.competition === null || (object(v.competition) && numbers(v.competition,['ratio']) && grade(v.competition.grade) && typeof v.competition.lowerBound === 'boolean'));

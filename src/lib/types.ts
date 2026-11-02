@@ -27,6 +27,8 @@ export interface KeywordMetric {
    * totalSearches 는 "이 값 미만"으로 읽어야 한다.
    */
   masked: boolean;
+  pcMasked?: boolean;
+  mobileMasked?: boolean;
 }
 
 /**

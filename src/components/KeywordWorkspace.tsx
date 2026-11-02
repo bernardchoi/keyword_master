@@ -181,7 +181,7 @@ export default function KeywordWorkspace({ rows, isFavorite, onToggleFavorite }:
           </div>
           <p className="footnote workspace-note">
             기회점수는 검색수 40%, 블로그 경쟁 45%, 모바일 비중 15%를 고정 구간으로 환산한 값입니다.
-            자료가 없으면 0점 처리하지 않고 신뢰도를 낮춥니다. 성공 확률이나 쇼핑 경쟁 점수가 아닙니다.
+            마스킹된 검색수는 확인된 검색량으로 계산하며, 경쟁 자료가 없으면 해당 항목을 가산하지 않고 신뢰도를 낮춥니다. 성공 확률이나 쇼핑 경쟁 점수가 아닙니다.
           </p>
         </div>
       </section>

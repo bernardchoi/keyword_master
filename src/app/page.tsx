@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Activity, useCallback, useEffect, useRef, useState } from 'react';
 import KeywordTable from '@/components/KeywordTable';
 import KeywordWorkspace from '@/components/KeywordWorkspace';
 import SummaryCards from '@/components/SummaryCards';
@@ -58,6 +58,7 @@ export default function Home() {
   // 세션이 끝나도 남아 있어야 매번 다시 입력하지 않는다 — localStorage 에 저장한다.
   const [blockedBrandsText, setBlockedBrandsText] = useLocalStorageText('km:blockedBrands:v1');
   const [tab, setTab] = useState<Tab>('keywords');
+  const [visitedTabs, setVisitedTabs] = useState<Tab[]>(['keywords']);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [data, setData] = useState<AnalyzeResponse | null>(null);
@@ -279,7 +280,10 @@ export default function Home() {
               role="tab"
               className="tab"
               aria-selected={tab === t.id}
-              onClick={() => setTab(t.id)}
+              onClick={() => {
+                setTab(t.id);
+                setVisitedTabs((previous) => previous.includes(t.id) ? previous : [...previous, t.id]);
+              }}
             >
               {t.label}
               {t.id === 'favorites' && favorites.count > 0 && ` (${favorites.count})`}
@@ -288,8 +292,8 @@ export default function Home() {
         </nav>
 
         {/* ─── 키워드 분석 ───────────────────────────────── */}
-        {tab === 'keywords' &&
-          (data ? (
+        <Activity mode={tab === 'keywords' ? 'visible' : 'hidden'}>
+          {data ? (
             <>
               {historyDiff && <HistoryDiffBanner diff={historyDiff} />}
               <SummaryCards data={data} />
@@ -340,11 +344,12 @@ export default function Home() {
               <h3>키워드를 입력하고 분석을 시작하세요</h3>
               <p>월간 검색수, 경쟁강도, 연관 키워드, 쇼핑 카테고리를 한 번에 확인할 수 있습니다.</p>
             </div>
-          ))}
+          )}
+        </Activity>
 
         {/* ─── 상품명 최적화 ────────────────────────────── */}
         {/* 계산이 순수 함수라 서버를 거치지 않는다 — 이미 받아 둔 rows 를 그대로 쓴다. */}
-        {tab === 'productName' && (
+        {visitedTabs.includes('productName') && <Activity mode={tab === 'productName' ? 'visible' : 'hidden'}>
           <ProductNameOptimizer
             data={data}
             name={productName}
@@ -354,18 +359,18 @@ export default function Home() {
             blockedBrandsText={blockedBrandsText}
             onBlockedBrandsChange={setBlockedBrandsText}
           />
-        )}
+        </Activity>}
 
         {/* ─── 구매층 · 시즌성 ──────────────────────────── */}
-        {tab === 'insight' && <InsightPanel keyword={data?.keyword ?? null} />}
+        {visitedTabs.includes('insight') && <Activity mode={tab === 'insight' ? 'visible' : 'hidden'}><InsightPanel keyword={data?.keyword ?? null} /></Activity>}
 
         {/* ─── 카테고리 ─────────────────────────────────── */}
         {/* 상품 검색 API 가 없으므로 카테고리는 쇼핑인사이트로 역추정한다.
             키워드당 11회 호출이라 버튼을 눌렀을 때만 돈다. */}
-        {tab === 'category' && <CategoryExplorer rows={data?.rows ?? []} onPick={pick} />}
+        {visitedTabs.includes('category') && <Activity mode={tab === 'category' ? 'visible' : 'hidden'}><CategoryExplorer rows={data?.rows ?? []} onPick={pick} /></Activity>}
 
         {/* ─── 태그 검사 ────────────────────────────────── */}
-        {tab === 'tag' && (
+        {visitedTabs.includes('tag') && <Activity mode={tab === 'tag' ? 'visible' : 'hidden'}>
           <TagChecker
             data={data}
             productName={productName}
@@ -374,23 +379,23 @@ export default function Home() {
             blockedBrandsText={blockedBrandsText}
             onBlockedBrandsChange={setBlockedBrandsText}
           />
-        )}
+        </Activity>}
 
         {/* ─── 순위 조회 ────────────────────────────────── */}
-        {tab === 'rank' && <RankChecker initialKeyword={data?.keyword ?? ''} />}
+        {visitedTabs.includes('rank') && <Activity mode={tab === 'rank' ? 'visible' : 'hidden'}><RankChecker initialKeyword={data?.keyword ?? ''} /></Activity>}
 
         {/* ─── 일괄 처리 ────────────────────────────────── */}
         {/* 상품마다 시드 키워드가 다를 수 있어 data 에 의존하지 않는다 — 자체적으로 /api/analyze 를 돈다. */}
-        {tab === 'batch' && (
+        {visitedTabs.includes('batch') && <Activity mode={tab === 'batch' ? 'visible' : 'hidden'}>
           <BatchOptimizer brands={ownBrands} blockedBrandsText={blockedBrandsText} />
-        )}
+        </Activity>}
 
         {/* ─── 분야 트렌드 ──────────────────────────────── */}
         {/* 검색창의 키워드와 무관하다 — 11개 쇼핑 분야 자체의 클릭 추이라 독립 조회다. */}
-        {tab === 'shoppingTrend' && <CategoryTrends />}
+        {visitedTabs.includes('shoppingTrend') && <Activity mode={tab === 'shoppingTrend' ? 'visible' : 'hidden'}><CategoryTrends /></Activity>}
 
         {/* ─── 즐겨찾기 ─────────────────────────────────── */}
-        {tab === 'favorites' && (
+        {visitedTabs.includes('favorites') && <Activity mode={tab === 'favorites' ? 'visible' : 'hidden'}>
           <div className="card">
             <div className="card-head">
               <div>
@@ -432,7 +437,7 @@ export default function Home() {
               />
             )}
           </div>
-        )}
+        </Activity>}
       </main>
     </>
   );

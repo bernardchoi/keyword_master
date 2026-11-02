@@ -18,11 +18,35 @@ describe('computeOpportunityScores', () => {
     expect(scores.get('좋음')!.score).toBeGreaterThan(scores.get('나쁨')!.score);
   });
 
-  it('경쟁 자료가 없으면 0점 대신 남은 항목을 재정규화하고 신뢰도를 낮춘다', () => {
+  it('경쟁 자료가 없으면 해당 항목을 가산하지 않고 신뢰도를 낮춘다', () => {
     const score = computeOpportunityScores([row('자료없음', 1000, null)]).get('자료없음')!;
     expect(score.score).toBeGreaterThan(0);
     expect(score.competition).toBeNull();
     expect(score.confidence).toBe('낮음');
+    const worst = computeOpportunityScores([row('최악', 1000, 100)]).get('최악')!;
+    expect(score.score).toBe(worst.score);
+  });
+
+  it.each(['pc', 'mobile'])('한쪽 기기(%s)만 마스킹되면 다른 기기의 확인된 수요를 유지한다', (device) => {
+    const target = {
+      ...row('부분마스킹', 10010, 1, true),
+      pcSearches: device === 'pc' ? 10 : 10000,
+      mobileSearches: device === 'mobile' ? 10 : 10000,
+      pcMasked: device === 'pc', mobileMasked: device === 'mobile',
+    };
+    const score = computeOpportunityScores([target]).get(target.keyword)!;
+    expect(score.demand).toBe(60);
+    expect(score.confidence).toBe('보통');
+  });
+
+  it('양쪽 마스킹과 이전 저장 형식을 보수적으로 계산한다', () => {
+    const target = { ...row('저검색량', 20, 1, true), pcSearches: 10, mobileSearches: 10 };
+    const score = computeOpportunityScores([target]).get(target.keyword)!;
+    expect(score.demand).toBe(0);
+    expect(score.mobile).toBe(0);
+    expect(score.score).toBeLessThan(23);
+    const legacy = { ...row('기존저장', 10010, 1, true), pcSearches: 10, mobileSearches: 10000 };
+    expect(computeOpportunityScores([legacy]).get(legacy.keyword)!.demand).toBe(60);
   });
 
   it('마스킹된 검색량은 신뢰도를 높음으로 표시하지 않는다', () => {

@@ -86,6 +86,8 @@ function toMetric(raw: RawKeyword): KeywordMetric {
     adDepth: num(raw.plAvgDepth),
     compIdx: raw.compIdx || '-',
     masked: pc.masked || mo.masked,
+    pcMasked: pc.masked,
+    mobileMasked: mo.masked,
   };
 }
 
@@ -111,7 +113,7 @@ export async function fetchKeywordTool(hints: string[]): Promise<KeywordMetric[]
 
   if (cleaned.length === 0) return [];
 
-  const cacheKey = `searchad:${cleaned.join('|')}`;
+  const cacheKey = `searchad:v2:${cleaned.join('|')}`;
 
   return cached(cacheKey, 6 * 3600 * 1000, async () => {
     const path = '/keywordstool';
